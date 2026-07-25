@@ -1,26 +1,65 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-void: #08090b; /* app chrome / outermost background */
+  --color-surface: #121417; /* panels, sidebars */
+  --color-surface-2: #1a1d22; /* raised cards, timeline track bg */
+  --color-surface-3: #23272e; /* hovered/active rows, input fields */
+  --color-line: #2b2f36; /* hairline borders/dividers */
+
+  --color-ink: #edebe6; /* primary text, warm off-white */
+  --color-ink-muted: #9aa0a8; /* secondary text */
+  --color-ink-faint: #5c6169; /* placeholders, disabled */
+
+  --color-signal: #ff6a2b;
+  --color-signal-dim: #7a3418;
+  --color-signal-glow: #ff9d66;
+
+  --color-synth: #8b5cf6;
+  --color-synth-dim: #3e2e70;
+  --color-synth-glow: #c4b0ff;
+
+  --color-render-ok: #34d399; /* export/render success */
+  --color-render-err: #f87171; /* failed job */
+  --color-render-wait: #fbbf24; /* queued/processing */
+
+  --font-display: 'Space Grotesk', 'Inter', sans-serif; /* headings, nav */
+  --font-body: 'Inter', 'Helvetica Neue', sans-serif; /* UI text */
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace; /* timecode, fps, frame counters */
+
+  --text-timecode: 0.9375rem; /* tuned size for HH:MM:SS:FF readouts */
+  --tracking-timecode: 0.05em;
+
+  --radius-deck: 0.5rem;
+  --radius-chip: 999px;
+  --radius-thumb: 0.375rem; /* clip thumbnails */
+
+  --shadow-scrim: 0 20px 50px -15px rgb(0 0 0 / 0.6);
+  --shadow-glow-synth: 0 0 24px -4px color-mix(in oklab, var(--color-synth) 60%, transparent);
+  --shadow-glow-signal: 0 0 24px -4px color-mix(in oklab, var(--color-signal) 60%, transparent);
+
+  --ease-scrub: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-pulse-rec: pulse-rec 1.4s ease-in-out infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes pulse-rec {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+/* thin, editing-suite style scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
 }
