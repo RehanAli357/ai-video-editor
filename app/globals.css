@@ -63,3 +63,7 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line) transparent;
 }
+
+button {
+  cursor: pointer;
+}

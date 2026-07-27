@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { ClerkProvider } from '@clerk/nextjs';
+import { ModalProvider } from '@/components/common/modal/modal-provider';
 
 export const metadata: Metadata = {
   title: 'Cutaway | AI Video Editor',
@@ -12,8 +14,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <ClerkProvider>
+          <ModalProvider>{children}</ModalProvider>
+        </ClerkProvider>
+      </body>
     </html>
   );
 }
