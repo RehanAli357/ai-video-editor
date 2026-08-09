@@ -8,14 +8,37 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prisma:format": "npx prisma format",
+    "prisma:migrate:dev": "npx prisma migrate dev --name init",
+    "prisma:generate": "npx prisma generate"
   },
   "dependencies": {
-    "@clerk/nextjs": "^7.6.1",
+    "@hookform/resolvers": "^5.5.7",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "@remotion/cli": "4.0.503",
+    "@remotion/google-fonts": "4.0.503",
+    "@remotion/web-renderer": "4.0.503",
+    "@tiptap/extension-color": "^3.29.2",
+    "@tiptap/extension-font-family": "^3.29.2",
+    "@tiptap/extension-text-align": "^3.29.2",
+    "@tiptap/extension-text-style": "^3.29.2",
+    "@tiptap/extension-underline": "^3.29.2",
+    "@tiptap/react": "^3.29.2",
+    "@tiptap/starter-kit": "^3.29.2",
+    "bcryptjs": "^3.0.3",
     "lucide-react": "^1.26.0",
     "next": "16.2.11",
+    "next-auth": "^4.24.15",
+    "pg": "^8.22.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.84.0",
+    "react-rnd": "^10.5.3",
+    "react-toastify": "^11.1.0",
+    "remotion": "4.0.503",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -27,6 +50,7 @@
     "eslint-config-prettier": "^10.0.2",
     "eslint-plugin-prettier": "^5.0.0",
     "prettier": "^3.5.3",
+    "prisma": "^7.9.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

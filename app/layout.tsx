@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { ClerkProvider } from '@clerk/nextjs';
 import { ModalProvider } from '@/components/common/modal/modal-provider';
+import { ToastContainer } from 'react-toastify';
+import Providers from './providers';
 
 export const metadata: Metadata = {
   title: 'Cutaway | AI Video Editor',
@@ -16,9 +17,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <ClerkProvider>
-          <ModalProvider>{children}</ModalProvider>
-        </ClerkProvider>
+        <ToastContainer style={{ zIndex: 10000 }} />
+        <ModalProvider>
+          <Providers>{children}</Providers>
+        </ModalProvider>
       </body>
     </html>
   );

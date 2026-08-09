@@ -2,9 +2,9 @@
 import Link from 'next/link';
 import { Wand2, Layers, Clock3, Gauge, ArrowRight, Play, Check } from 'lucide-react';
 import { useModal } from '@/components/common/modal/modal-provider';
-import { AuthModal } from '@/components/modals/auth-modal';
-// A track segment in the hero timeline. `kind` decides the color language:
-// "captured" footage reads in signal (amber), "generated" clips read in synth (violet).
+import { AuthModal } from '@/components/modals/auth-modal/index';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 type Segment = { kind: 'captured' | 'generated'; width: string; label: string };
 
 const track: Segment[] = [
@@ -44,6 +44,23 @@ const features = [
 
 export default function LandingPage() {
   const { openModal } = useModal();
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const handleDashboardClick = () => {
+    // Optional: avoid action while session is loading
+    if (status === 'loading') return;
+
+    if (session) {
+      router.push('/dashboard');
+      return;
+    }
+
+    openModal(<AuthModal />, {
+      size: 'xl',
+      closeOnBackdrop: true,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-void">
       {/* ---------- Nav ---------- */}
@@ -64,12 +81,7 @@ export default function LandingPage() {
           </a>
         </nav>
         <button
-          onClick={() => {
-            openModal(<AuthModal mode="login" />, {
-              size: 'md',
-              closeOnBackdrop: true,
-            });
-          }}
+          onClick={handleDashboardClick}
           className="rounded-chip bg-surface-3 border border-line px-4 py-2 text-sm text-ink hover:border-synth transition-colors"
         >
           Open dashboard
