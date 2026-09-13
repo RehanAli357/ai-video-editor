@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import prisma from '@/lib/prisma';
+import { createUser, findUser, findUserByEmail } from '@/lib/auth-users';
 
 export async function POST(req: Request) {
   try {
@@ -10,11 +9,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'All fields are required' }, { status: 400 });
     }
 
-    const existingUser = await prisma.auth_user.findFirst({
-      where: {
-        OR: [{ username }, { email }],
-      },
-    });
+    const existingUser = findUser(username) ?? findUserByEmail(email);
 
     if (existingUser) {
       return NextResponse.json(
@@ -26,15 +21,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    await prisma.auth_user.create({
-      data: {
-        username,
-        email,
-        password: hashedPassword,
-      },
-    });
+    await createUser(username, email, password);
 
     return NextResponse.json(
       {

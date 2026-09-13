@@ -1,7 +1,8 @@
 'use client';
 import { Film, Trash2, Plus } from 'lucide-react';
 import type { Slide, SlideElement } from './types/slide';
-import { createEmptySlide } from './types/slide';
+import { addSlide, removeElement, removeSlide, updateBackground, updateSlideElement } from './actions/slide-actions';
+import { addTextElement } from './actions/text-actions';
 import SlideElementEditor from './slide-element-editor';
 
 interface SlidesPanelProps {
@@ -18,13 +19,13 @@ const SlidesPanel = ({
   onSelectSlide,
 }: SlidesPanelProps) => {
   const handleAddSlide = () => {
-    const newSlide = createEmptySlide(slides.length + 1);
-    onSlidesChange([...slides, newSlide]);
-    onSelectSlide(newSlide.id);
+    const result = addSlide(slides);
+    onSlidesChange(result.slides);
+    onSelectSlide(result.slide.id);
   };
 
   const handleRemoveSlide = (id: string) => {
-    const next = slides.filter((slide) => slide.id !== id);
+    const next = removeSlide(slides, id);
     onSlidesChange(next);
     if (selectedSlideId === id) {
       onSelectSlide(next[0]?.id ?? '');
@@ -33,51 +34,27 @@ const SlidesPanel = ({
 
   const handleAddText = (slideId: string) => {
     onSlidesChange(
-      slides.map((slide) =>
-        slide.id === slideId
-          ? {
-              ...slide,
-              elements: [
-                ...slide.elements,
-                {
-                  id: crypto.randomUUID(),
-                  type: 'text',
-                  content: '',
-                  color: '#ffffff',
-                } as SlideElement,
-              ],
-            }
-          : slide
-      )
+      slides.map((slide) => (slide.id === slideId ? addTextElement(slide) : slide))
     );
   };
 
   const handleUpdateElement = (slideId: string, updated: SlideElement) => {
     onSlidesChange(
-      slides.map((slide) =>
-        slide.id === slideId
-          ? {
-              ...slide,
-              elements: slide.elements.map((el) => (el.id === updated.id ? updated : el)),
-            }
-          : slide
-      )
+      slides.map((slide) => (slide.id === slideId ? updateSlideElement(slide, updated) : slide))
     );
   };
 
   const handleRemoveElement = (slideId: string, elementId: string) => {
     onSlidesChange(
-      slides.map((slide) =>
-        slide.id === slideId
-          ? { ...slide, elements: slide.elements.filter((el) => el.id !== elementId) }
-          : slide
-      )
+      slides.map((slide) => (slide.id === slideId ? removeElement(slide, elementId) : slide))
     );
   };
 
   const handleUpdateBackground = (slideId: string, backgroundColor: string) => {
     onSlidesChange(
-      slides.map((slide) => (slide.id === slideId ? { ...slide, backgroundColor } : slide))
+      slides.map((slide) =>
+        slide.id === slideId ? updateBackground(slide, backgroundColor) : slide
+      )
     );
   };
 

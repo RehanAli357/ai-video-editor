@@ -36,15 +36,30 @@ const CanvasElement = ({ element, isSelected, scale, onSelect, onUpdate }: Canva
       FontSize,
       TextAlign.configure({ types: ['paragraph'] }),
     ],
-    content: element.content,
+    content: element.type === 'text' ? element.content : '',
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
-      onUpdate({ ...element, content: editor.getHTML() });
+      if (element.type === 'text') {
+        onUpdate({ ...element, content: editor.getHTML() });
+      }
     },
   });
 
+  const shapeGraphic =
+    element.type === 'shape' ? (
+      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {element.shape === 'circle' ? (
+          <ellipse cx="50" cy="50" rx="50" ry="50" fill={element.fill} />
+        ) : element.shape === 'triangle' ? (
+          <polygon points="50,0 100,100 0,100" fill={element.fill} />
+        ) : (
+          <rect width="100" height="100" fill={element.fill} />
+        )}
+      </svg>
+    ) : null;
+
   useEffect(() => {
-    if (editor && editor.getHTML() !== element.content) {
+    if (element.type === 'text' && editor && editor.getHTML() !== element.content) {
       editor.commands.setContent(element.content, { emitUpdate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,19 +82,36 @@ const CanvasElement = ({ element, isSelected, scale, onSelect, onUpdate }: Canva
       }
       onMouseDown={(e) => {
         e.stopPropagation();
-        onSelect(editor ?? null);
+        onSelect(element.type === 'text' ? editor ?? null : null);
       }}
       className={`flex items-center border-2 ${
         isSelected ? 'border-blue-500' : 'border-transparent hover:border-blue-500/40'
       }`}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="tiptap-canvas-text h-full w-full overflow-hidden"
-        style={{ padding: 8, boxSizing: 'border-box', whiteSpace: 'pre-wrap' }}
-      >
-        <EditorContent editor={editor} className="h-full w-full" />
-      </div>
+      {element.type === 'image' ? (
+        <img
+          src={element.src}
+          alt="Uploaded slide asset"
+          onClick={(e) => e.stopPropagation()}
+          className="h-full w-full object-cover"
+        />
+      ) : element.type === 'shape' ? (
+        <div
+          aria-label={element.label ?? `${element.shape} shape`}
+          onClick={(e) => e.stopPropagation()}
+          className="h-full w-full"
+        >
+          {shapeGraphic}
+        </div>
+      ) : (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="tiptap-canvas-text h-full w-full overflow-hidden"
+          style={{ padding: 8, boxSizing: 'border-box', whiteSpace: 'pre-wrap' }}
+        >
+          <EditorContent editor={editor} className="h-full w-full" />
+        </div>
+      )}
     </Rnd>
   );
 };

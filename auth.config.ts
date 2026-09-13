@@ -1,7 +1,7 @@
 import { AuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
-import prisma from '@/lib/prisma';
+import { findUser } from '@/lib/auth-users';
 
 export const authOptions: AuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -20,11 +20,7 @@ export const authOptions: AuthOptions = {
           throw new Error('Username and password are required');
         }
 
-        const user = await prisma.auth_user.findUnique({
-          where: {
-            username: credentials.username as string,
-          },
-        });
+        const user = findUser(credentials.username as string);
 
         if (!user) {
           throw new Error('Invalid username or password');

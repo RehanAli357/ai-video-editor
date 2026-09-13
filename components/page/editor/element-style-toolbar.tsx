@@ -8,6 +8,15 @@ import {
   AlignCenter,
   AlignRight,
 } from 'lucide-react';
+import {
+  setTextAlignment,
+  setTextColor,
+  setTextFontFamily,
+  setTextFontSize,
+  toggleBold,
+  toggleItalic,
+  toggleUnderline,
+} from './actions/text-actions';
 
 interface ElementStyleToolbarProps {
   editor: Editor | null;
@@ -24,7 +33,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleBold().run()}
+          onClick={() => toggleBold(editor)}
           className={`rounded border px-2 py-1 text-xs ${
             editor.isActive('bold')
               ? 'border-ink bg-ink text-surface'
@@ -35,7 +44,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
         </button>
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleItalic().run()}
+          onClick={() => toggleItalic(editor)}
           className={`rounded border px-2 py-1 text-xs ${
             editor.isActive('italic')
               ? 'border-ink bg-ink text-surface'
@@ -46,7 +55,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
         </button>
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          onClick={() => toggleUnderline(editor)}
           className={`rounded border px-2 py-1 text-xs ${
             editor.isActive('underline')
               ? 'border-ink bg-ink text-surface'
@@ -60,7 +69,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+          onClick={() => setTextAlignment(editor, 'left')}
           className={`rounded border px-2 py-1 text-xs ${
             editor.isActive({ textAlign: 'left' })
               ? 'border-ink bg-ink text-surface'
@@ -71,7 +80,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
         </button>
         <button
           type="button"
-          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+          onClick={() => setTextAlignment(editor, 'center')}
           className={`rounded border px-2 py-1 text-xs ${
             editor.isActive({ textAlign: 'center' })
               ? 'border-ink bg-ink text-surface'
@@ -82,7 +91,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
         </button>
         <button
           type="button"
-          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          onClick={() => setTextAlignment(editor, 'right')}
           className={`rounded border px-2 py-1 text-xs ${
             editor.isActive({ textAlign: 'right' })
               ? 'border-ink bg-ink text-surface'
@@ -97,7 +106,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
         <label className="text-[10px] font-medium text-ink-muted">Color</label>
         <input
           type="color"
-          onChange={(e) => editor?.chain().focus().setColor(e.target.value).run()}
+          onChange={(e) => setTextColor(editor, e.target.value)}
           className="h-6 w-8 cursor-pointer rounded border border-line bg-transparent p-0"
         />
       </div>
@@ -105,7 +114,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
       <div className="flex items-center gap-1.5">
         <label className="text-[10px] font-medium text-ink-muted">Font</label>
         <select
-          onChange={(e) => editor?.chain().focus().setFontFamily(e.target.value).run()}
+          onChange={(e) => setTextFontFamily(editor, e.target.value)}
           className="rounded border border-line bg-gray-950/60 px-1.5 py-1 text-xs text-ink"
           defaultValue=""
         >
@@ -126,11 +135,7 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
           onChange={(e) => {
             const size = e.target.value;
             if (!size) return;
-            editor
-              .chain()
-              .focus()
-              .toggleMark('textStyle', { fontSize: `${size}px` })
-              .run();
+            setTextFontSize(editor, size);
           }}
           className="rounded border border-line bg-gray-950/60 px-1.5 py-1 text-xs text-ink"
           defaultValue=""
