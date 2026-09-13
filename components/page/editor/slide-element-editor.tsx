@@ -20,24 +20,55 @@ const SlideElementEditor = ({ element, onUpdate, onRemove }: SlideElementEditorP
         </button>
       </div>
 
-      <textarea
-        value={element.content}
-        onChange={(e) => onUpdate({ ...element, content: e.target.value })}
-        rows={2}
-        placeholder="Enter text..."
-        className="w-full resize-none rounded-md border border-line bg-surface px-2 py-1.5 text-xs text-ink"
-      />
+      {element.type === 'text' ? (
+        <>
+          <textarea
+            value={element.content}
+            onChange={(e) => onUpdate({ ...element, content: e.target.value })}
+            rows={2}
+            placeholder="Enter text..."
+            className="w-full resize-none rounded-md border border-line bg-surface px-2 py-1.5 text-xs text-ink"
+          />
 
-      <div className="flex items-center gap-2">
-        <label className="text-[10px] font-medium text-ink-muted">Color</label>
-        <input
-          type="color"
-          value={element.color}
-          onChange={(e) => onUpdate({ ...element, color: e.target.value })}
-          className="h-6 w-10 cursor-pointer rounded border border-line bg-transparent p-0"
-        />
-        <span className="text-[10px] text-ink-muted">{element.color}</span>
-      </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] font-medium text-ink-muted">Color</label>
+            <input
+              type="color"
+              value={element.color || '#ffffff'}
+              onChange={(e) => onUpdate({ ...element, color: e.target.value })}
+              className="h-6 w-10 cursor-pointer rounded border border-line bg-transparent p-0"
+            />
+            <span className="text-[10px] text-ink-muted">{element.color}</span>
+          </div>
+        </>
+      ) : element.type === 'image' ? (
+        <img src={element.src} alt="Uploaded slide asset" className="h-16 w-full object-cover" />
+      ) : (
+        <>
+          <div
+            className="h-16 w-full"
+            style={{
+              backgroundColor: element.fill,
+              borderRadius: element.shape === 'circle' ? '50%' : 0,
+              clipPath:
+                element.shape === 'triangle'
+                  ? 'polygon(50% 0%, 100% 100%, 0% 100%)'
+                  : undefined,
+            }}
+          />
+
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] font-medium text-ink-muted">Fill</label>
+            <input
+              type="color"
+              value={element.fill}
+              onChange={(e) => onUpdate({ ...element, fill: e.target.value })}
+              className="h-6 w-10 cursor-pointer rounded border border-line bg-transparent p-0"
+            />
+            <span className="text-[10px] text-ink-muted">{element.fill}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 };

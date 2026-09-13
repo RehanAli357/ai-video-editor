@@ -4,10 +4,16 @@ import { MyComposition } from '@/remotion/composition';
 import { Player } from '@remotion/player';
 import { renderMediaOnWeb } from '@remotion/web-renderer';
 import { useState } from 'react';
-import { Download, Plus, Trash2 } from 'lucide-react';
+import { Download, ImagePlus, Plus, Trash2 } from 'lucide-react';
 import type { Slide } from './types/slide';
-import { createEmptySlide, createTextElement } from './types/slide';
+import { addImageElement, isImageFile, readImageFile } from './actions/image-actions';
+import { addSlide, removeSlide, updateSlide } from './actions/slide-actions';
+import { addShapeElement } from './actions/shape-actions';
+import { addTextElement } from './actions/text-actions';
+import LayersPanel from './layers-panel';
+import ShapeMenu from './shape-menu';
 import SlideCanvas from './slide-canvas';
+import type { ShapeType } from './types/slide';
 
 const dimensions = [
   { label: '1080p', width: 1920, height: 1080 },
@@ -16,7 +22,7 @@ const dimensions = [
 ];
 
 const FPS = 30;
-const FRAMES_PER_SLIDE = 90;
+const DEFAULT_SLIDE_DURATION = 3;
 
 const RemotionPlayer = () => {
   const [selectedDimension, setSelectedDimension] = useState(dimensions[1]);
@@ -25,33 +31,59 @@ const RemotionPlayer = () => {
 
   const [isRendering, setIsRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  const totalDuration = Math.max(slides.length * FRAMES_PER_SLIDE, FRAMES_PER_SLIDE);
+  const totalDuration = Math.max(
+    Math.round(
+      slides.reduce(
+        (total, slide) => total + Math.max(0.5, slide.duration ?? DEFAULT_SLIDE_DURATION) * FPS,
+        0
+      )
+    ),
+    FPS
+  );
 
   const selectedSlide = slides.find((s) => s.id === selectedSlideId);
 
   const handleAddSlide = () => {
-    const newSlide = createEmptySlide(slides.length + 1);
+    const result = addSlide(slides);
 
-    setSlides([...slides, newSlide]);
-    setSelectedSlideId(newSlide.id);
+    setSlides(result.slides);
+    setSelectedSlideId(result.slide.id);
   };
 
   const handleUpdateSlide = (updated: Slide) => {
-    setSlides((current) => current.map((s) => (s.id === updated.id ? updated : s)));
+    setSlides((current) => updateSlide(current, updated));
   };
 
   const handleAddText = () => {
     if (!selectedSlide) return;
 
-    handleUpdateSlide({
-      ...selectedSlide,
-      elements: [...selectedSlide.elements, createTextElement()],
-    });
+    handleUpdateSlide(addTextElement(selectedSlide));
+  };
+
+  const handleAddShape = (shape: ShapeType) => {
+    if (!selectedSlide) return;
+    handleUpdateSlide(addShapeElement(selectedSlide, shape));
+  };
+
+  const handleUploadImage = async (file: File) => {
+    if (!selectedSlide || !isImageFile(file)) return;
+
+    setIsUploadingImage(true);
+
+    try {
+      const src = await readImageFile(file);
+      handleUpdateSlide(addImageElement(selectedSlide, src, file.type));
+    } catch (error) {
+      console.error('Image upload failed:', error);
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const handleRemoveSlide = (id: string) => {
-    const next = slides.filter((s) => s.id !== id);
+    const next = removeSlide(slides, id);
 
     setSlides(next);
 
@@ -177,50 +209,93 @@ const RemotionPlayer = () => {
         </button>
       </div>
 
-      <div className="rounded-xl bg-gray-950 p-4">
-        <SlideCanvas
-          slide={selectedSlide}
-          width={selectedDimension.width}
-          height={selectedDimension.height}
-          onUpdateSlide={handleUpdateSlide}
-        />
+      <div className="grid gap-4 rounded-xl bg-gray-950 p-4 md:grid-cols-[minmax(0,1fr)_240px]">
+        <div className="min-w-0">
+          <SlideCanvas
+            slide={selectedSlide}
+            width={selectedDimension.width}
+            height={selectedDimension.height}
+            onUpdateSlide={handleUpdateSlide}
+          />
 
-        {selectedSlide && (
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1">
-              <label className="text-[10px] font-medium text-ink-muted">Background</label>
+          {selectedSlide && (
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1">
+                <label className="text-[10px] font-medium text-ink-muted">Background</label>
 
-              <input
-                type="color"
-                value={selectedSlide.backgroundColor}
-                onChange={(e) =>
-                  handleUpdateSlide({
-                    ...selectedSlide,
-                    backgroundColor: e.target.value,
-                  })
-                }
-                className="h-5 w-8 cursor-pointer rounded border border-line bg-transparent p-0"
-              />
+                <input
+                  type="color"
+                  value={selectedSlide.backgroundColor}
+                  onChange={(e) =>
+                    handleUpdateSlide({
+                      ...selectedSlide,
+                      backgroundColor: e.target.value,
+                    })
+                  }
+                  className="h-5 w-8 cursor-pointer rounded border border-line bg-transparent p-0"
+                />
+              </div>
+
+              <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1 text-[10px] font-medium text-ink-muted">
+                <span>Duration</span>
+                <input
+                  type="number"
+                  min="0.5"
+                  max="60"
+                  step="0.5"
+                  value={selectedSlide.duration ?? DEFAULT_SLIDE_DURATION}
+                  aria-label="Slide duration in seconds"
+                  title="Slide duration in seconds"
+                  onChange={(event) =>
+                    handleUpdateSlide({
+                      ...selectedSlide,
+                      duration: Math.min(60, Math.max(0.5, Number(event.target.value) || 0.5)),
+                    })
+                  }
+                  className="w-12 rounded border border-line bg-gray-950/60 px-1 py-1 text-[10px] text-ink"
+                />
+                <span>s</span>
+              </label>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleAddText}
+                  className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-gray-900"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add text
+                </button>
+
+                <ShapeMenu onAdd={handleAddShape} disabled={!selectedSlide} />
+
+                <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-gray-900 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {isUploadingImage ? 'Uploading...' : 'Add image'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isUploadingImage}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadImage(file);
+                      e.currentTarget.value = '';
+                    }}
+                    className="sr-only"
+                  />
+                </label>
+
+                <button
+                  onClick={() => handleRemoveSlide(selectedSlide.id)}
+                  className="rounded-lg p-1.5 text-ink-muted hover:bg-gray-900 hover:text-ink"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
+          )}
+        </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleAddText}
-                className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-gray-900"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add text
-              </button>
-
-              <button
-                onClick={() => handleRemoveSlide(selectedSlide.id)}
-                className="rounded-lg p-1.5 text-ink-muted hover:bg-gray-900 hover:text-ink"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        <LayersPanel slide={selectedSlide} onUpdateSlide={handleUpdateSlide} />
       </div>
 
       <div>
