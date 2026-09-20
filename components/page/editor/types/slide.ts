@@ -27,6 +27,7 @@ export interface ImageElement {
   animationDuration?: number;
   animationDelay?: number;
   src: string;
+  srcPath?: string;
   mimeType?: string;
   x: number;
   y: number;
@@ -56,6 +57,8 @@ export interface Slide {
   name: string;
   duration?: number;
   backgroundColor: string;
+  backgroundImage?: string;
+  backgroundImagePath?: string;
   elements: SlideElement[];
 }
 
@@ -77,10 +80,15 @@ export const createTextElement = (): SlideElement => ({
   height: 160,
 });
 
-export const createImageElement = (src: string, mimeType?: string): ImageElement => ({
+export const createImageElement = (
+  src: string,
+  mimeType?: string,
+  srcPath?: string
+): ImageElement => ({
   id: crypto.randomUUID(),
   type: 'image',
   src,
+  srcPath,
   mimeType,
   x: 80,
   y: 80,
@@ -88,7 +96,7 @@ export const createImageElement = (src: string, mimeType?: string): ImageElement
   height: 360,
 });
 
-export const createShapeElement = (shape: ShapeType): ShapeElement => ({
+export const  createShapeElement = (shape: ShapeType): ShapeElement => ({
   id: crypto.randomUUID(),
   type: 'shape',
   shape,

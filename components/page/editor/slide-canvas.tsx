@@ -31,6 +31,7 @@ const SlideCanvas = ({ slide, width, height, onUpdateSlide }: SlideCanvasProps) 
   const displayWidth = Math.min(MAX_CANVAS_DISPLAY_WIDTH, Math.max(MIN_CANVAS_DISPLAY_WIDTH, width > height ? 640 : 480));
   const displayHeight = displayWidth / aspectRatio;
   const scale = displayWidth / width;
+  const isGradientBackground = slide.backgroundColor.startsWith('linear-gradient(');
 
   const handleUpdateElement = (updated: SlideElement) => {
     onUpdateSlide({
@@ -63,7 +64,15 @@ const SlideCanvas = ({ slide, width, height, onUpdateSlide }: SlideCanvasProps) 
           style={{
             width,
             height,
-            backgroundColor: slide.backgroundColor,
+            backgroundColor: isGradientBackground ? '#000000' : slide.backgroundColor,
+            backgroundImage: slide.backgroundImage
+              ? `url("${slide.backgroundImage}")`
+              : isGradientBackground
+                ? slide.backgroundColor
+                : undefined,
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: 'cover',
             transform: `scale(${scale})`,
           }}
         >

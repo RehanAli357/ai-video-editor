@@ -1,0 +1,164 @@
+{
+  "_aiInstructions": {
+    "purpose": "Generate a video project JSON that can be uploaded into this editor.",
+    "requiredTopLevelFields": ["slides", "selectedDimension"],
+    "optionalTopLevelFields": ["videoName"],
+    "supportedDimensions": [
+      { "label": "1080p", "width": 1920, "height": 1080 },
+      { "label": "720p", "width": 1280, "height": 720 },
+      { "label": "Square", "width": 1080, "height": 1080 }
+    ],
+    "supportedElementTypes": {
+      "text": [
+        "id",
+        "type",
+        "content",
+        "x",
+        "y",
+        "width",
+        "height",
+        "label",
+        "animation",
+        "animationDuration",
+        "animationDelay",
+        "color",
+        "fontSize",
+        "fontWeight"
+      ],
+      "image": [
+        "id",
+        "type",
+        "src",
+        "x",
+        "y",
+        "width",
+        "height",
+        "label",
+        "animation",
+        "animationDuration",
+        "animationDelay",
+        "mimeType"
+      ],
+      "shape": [
+        "id",
+        "type",
+        "shape",
+        "fill",
+        "x",
+        "y",
+        "width",
+        "height",
+        "label",
+        "animation",
+        "animationDuration",
+        "animationDelay"
+      ]
+    },
+    "supportedAnimations": ["none", "fade", "slide-left", "slide-up", "zoom"],
+    "textHtmlStyles": [
+      "font-family (use any system font or Google Font from the editor font picker)",
+      "font-size",
+      "font-weight",
+      "font-style",
+      "text-decoration",
+      "text-align",
+      "color"
+    ],
+    "notes": [
+      "Use stable unique string IDs for slides and elements.",
+      "Use an http or https URL for image src so the imported project can render it.",
+      "Slides may include backgroundImage with an http or https image URL.",
+      "Use a solid hex color or a CSS linear-gradient string for backgroundColor.",
+      "Text content may contain HTML such as <p> and inline styles.",
+      "Set text fonts inside content, for example: <p style=\"font-family: 'Montserrat'; font-weight: 700;\">Heading</p>.",
+      "Google Fonts are loaded automatically when their family name appears in text HTML.",
+      "Coordinates and dimensions are measured in pixels.",
+      "Do not embed base64 or data URLs in media src values.",
+      "Video and audio elements are not supported by the current editor schema."
+    ]
+  },
+  "videoName": "ai-generated-story",
+  "slides": [
+    {
+      "id": "slide-intro",
+      "name": "Intro",
+      "duration": 4,
+      "backgroundColor": "linear-gradient(135deg, #101827, #3e2e70)",
+      "elements": [
+        {
+          "id": "intro-title",
+          "type": "text",
+          "label": "Main title",
+          "content": "<p style=\"font-family: 'Montserrat'; font-size: 64px; font-weight: 700;\">Build something remarkable</p>",
+          "color": "#ffffff",
+          "fontSize": 64,
+          "fontWeight": "bold",
+          "x": 120,
+          "y": 180,
+          "width": 1680,
+          "height": 150,
+          "animation": "fade",
+          "animationDuration": 0.8,
+          "animationDelay": 0
+        },
+        {
+          "id": "intro-subtitle",
+          "type": "text",
+          "label": "Subtitle",
+          "content": "<p style=\"font-family: 'Poppins'; font-size: 28px; font-style: italic; text-decoration: underline;\">A project generated from a portable JSON structure.</p>",
+          "color": "#b8c4d6",
+          "fontSize": 28,
+          "x": 124,
+          "y": 350,
+          "width": 1200,
+          "height": 80,
+          "animation": "slide-up",
+          "animationDuration": 0.6,
+          "animationDelay": 0.3
+        },
+        {
+          "id": "intro-accent",
+          "type": "shape",
+          "label": "Accent block",
+          "shape": "rectangle",
+          "fill": "#3dd6b0",
+          "x": 124,
+          "y": 470,
+          "width": 240,
+          "height": 12,
+          "animation": "slide-left",
+          "animationDuration": 0.5,
+          "animationDelay": 0.5
+        }
+      ]
+    },
+    {
+      "id": "slide-image",
+      "name": "Image showcase",
+      "duration": 5,
+      "backgroundColor": "#f2eee6",
+      "backgroundImage": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=1920&q=80",
+      "elements": [
+        {
+          "id": "showcase-image",
+          "type": "image",
+          "label": "Remote image",
+          "src": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=1600&q=80",
+          "mimeType": "image/jpeg",
+          "x": 120,
+          "y": 100,
+          "width": 1680,
+          "height": 880,
+          "animation": "zoom",
+          "animationDuration": 1,
+          "animationDelay": 0
+        }
+      ]
+    }
+  ],
+  "selectedDimension": {
+    "label": "1080p",
+    "width": 1920,
+    "height": 1080
+  }
+}

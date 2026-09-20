@@ -47,15 +47,16 @@ const CanvasElement = ({ element, isSelected, scale, onSelect, onUpdate }: Canva
 
   const shapeGraphic =
     element.type === 'shape' ? (
-      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {element.shape === 'circle' ? (
-          <ellipse cx="50" cy="50" rx="50" ry="50" fill={element.fill} />
-        ) : element.shape === 'triangle' ? (
-          <polygon points="50,0 100,100 0,100" fill={element.fill} />
-        ) : (
-          <rect width="100" height="100" fill={element.fill} />
-        )}
-      </svg>
+      <div
+        aria-hidden="true"
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: element.fill,
+          borderRadius: element.shape === 'circle' ? '50%' : undefined,
+          clipPath: element.shape === 'triangle' ? 'polygon(50% 0%, 100% 100%, 0% 100%)' : undefined,
+        }}
+      />
     ) : null;
 
   useEffect(() => {
@@ -84,7 +85,7 @@ const CanvasElement = ({ element, isSelected, scale, onSelect, onUpdate }: Canva
         e.stopPropagation();
         onSelect(element.type === 'text' ? editor ?? null : null);
       }}
-      className={`flex items-center border-2 ${
+      className={`box-border flex items-center overflow-hidden border-2 ${
         isSelected ? 'border-blue-500' : 'border-transparent hover:border-blue-500/40'
       }`}
     >
@@ -93,13 +94,14 @@ const CanvasElement = ({ element, isSelected, scale, onSelect, onUpdate }: Canva
           src={element.src}
           alt="Uploaded slide asset"
           onClick={(e) => e.stopPropagation()}
-          className="h-full w-full object-cover"
+          className="block h-full w-full object-cover"
         />
       ) : element.type === 'shape' ? (
         <div
           aria-label={element.label ?? `${element.shape} shape`}
           onClick={(e) => e.stopPropagation()}
           className="h-full w-full"
+          style={{ boxSizing: 'border-box' }}
         >
           {shapeGraphic}
         </div>
@@ -107,7 +109,21 @@ const CanvasElement = ({ element, isSelected, scale, onSelect, onUpdate }: Canva
         <div
           onClick={(e) => e.stopPropagation()}
           className="tiptap-canvas-text h-full w-full overflow-hidden"
-          style={{ padding: 8, boxSizing: 'border-box', whiteSpace: 'pre-wrap' }}
+          style={{
+            padding: 8,
+            boxSizing: 'border-box',
+            whiteSpace: 'pre-wrap',
+            color: element.color || '#ffffff',
+            fontSize: element.fontSize ? `${element.fontSize}px` : '32px',
+            fontWeight: element.fontWeight || 'normal',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+            lineHeight: 1.2,
+            letterSpacing: 0,
+          }}
         >
           <EditorContent editor={editor} className="h-full w-full" />
         </div>
