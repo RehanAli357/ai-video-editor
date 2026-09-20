@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import {
   Bold,
@@ -17,15 +18,17 @@ import {
   toggleItalic,
   toggleUnderline,
 } from './actions/text-actions';
+import FontPicker from './font-picker';
 
 interface ElementStyleToolbarProps {
   editor: Editor | null;
 }
 
-const FONT_FAMILIES = ['Inter', 'Arial', 'Georgia', 'Courier New', 'Times New Roman'];
 const FONT_SIZES = ['12', '16', '20', '24', '28', '32', '40', '48'];
 
 const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
+  const [selectedFont, setSelectedFont] = useState<string>('');
+
   if (!editor) return null;
 
   return (
@@ -113,20 +116,13 @@ const ElementStyleToolbar = ({ editor }: ElementStyleToolbarProps) => {
 
       <div className="flex items-center gap-1.5">
         <label className="text-[10px] font-medium text-ink-muted">Font</label>
-        <select
-          onChange={(e) => setTextFontFamily(editor, e.target.value)}
-          className="rounded border border-line bg-gray-950/60 px-1.5 py-1 text-xs text-ink"
-          defaultValue=""
-        >
-          <option value="" disabled>
-            Select
-          </option>
-          {FONT_FAMILIES.map((font) => (
-            <option key={font} value={font}>
-              {font}
-            </option>
-          ))}
-        </select>
+        <FontPicker
+          value={selectedFont}
+          onChange={(font) => {
+            setSelectedFont(font);
+            setTextFontFamily(editor, font);
+          }}
+        />
       </div>
 
       <div className="flex items-center gap-1.5">

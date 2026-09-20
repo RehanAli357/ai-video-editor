@@ -14,6 +14,8 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { useModal } from '@/components/common/modal/modal-provider';
 
 // ---- mock data -------------------------------------------------------
 
@@ -95,6 +97,45 @@ const navItems = [
   { label: 'Team', icon: Users, active: false },
   { label: 'Settings', icon: Settings, active: false },
 ];
+
+function NewProjectModal({ onSubmit }: { onSubmit: (name: string) => void }) {
+  const { closeModal } = useModal();
+  const [name, setName] = useState('my-video');
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSubmit(name.trim() || 'my-video');
+    closeModal();
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-ink">Create new project</h2>
+        <p className="mt-1 text-sm text-ink-muted">Choose a name for your video project.</p>
+      </div>
+
+      <label className="block text-sm font-medium text-ink">
+        Video name
+        <input
+          autoFocus
+          type="text"
+          value={name}
+          maxLength={100}
+          onChange={(event) => setName(event.target.value)}
+          className="mt-2 w-full rounded-lg border border-line bg-gray-950/60 px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+        />
+      </label>
+
+      <button
+        type="submit"
+        className="w-full rounded-lg bg-signal px-4 py-2 text-sm font-medium text-void hover:opacity-90"
+      >
+        Create project
+      </button>
+    </form>
+  );
+}
 
 // ---- signature element: timeline ruler --------------------------------
 
@@ -222,6 +263,7 @@ function ProjectCard({ project }: { project: Project }) {
 
 const DashboardPage = () => {
   const router = useRouter();
+  const { openModal } = useModal();
   return (
     <div className="flex min-h-screen bg-void text-ink">
       {/* sidebar */}
@@ -279,7 +321,14 @@ const DashboardPage = () => {
             </div>
             <button
               onClick={() => {
-                router.push('/editor');
+                openModal(
+                  <NewProjectModal
+                    onSubmit={(videoName) =>
+                      router.push(`/editor?videoName=${encodeURIComponent(videoName)}`)
+                    }
+                  />,
+                  { size: 'sm' }
+                );
               }}
               className="flex items-center gap-2 rounded-deck bg-signal px-4 py-2 text-sm font-medium text-void shadow-glow-signal transition-transform hover:scale-[1.02]"
             >

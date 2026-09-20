@@ -17,9 +17,14 @@ export const readImageFile = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-export const addImageElement = (slide: Slide, src: string, mimeType?: string): Slide => ({
+export const addImageElement = (
+  slide: Slide,
+  src: string,
+  mimeType?: string,
+  srcPath?: string
+): Slide => ({
   ...slide,
-  elements: [...slide.elements, createImageElement(src, mimeType)],
+  elements: [...slide.elements, createImageElement(src, mimeType, srcPath)],
 });
 
 export const updateImageElement = (

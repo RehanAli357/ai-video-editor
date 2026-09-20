@@ -9,10 +9,15 @@ import {
   useCurrentFrame,
 } from 'remotion';
 import { Gif } from '@remotion/gif';
+import { getAvailableFonts } from '@remotion/google-fonts';
+import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
+import { useEffect, useState } from 'react';
 import type { AnimationType, Slide } from '../components/page/editor/types/slide';
 
 const FPS = 30;
 const DEFAULT_SLIDE_DURATION = 3;
+const { fontFamily: interFontFamily } = loadInter();
+const availableFonts = getAvailableFonts();
 
 interface MyCompositionProps {
   slides?: Slide[];
@@ -25,21 +30,15 @@ const ShapeGraphic = ({
   shape: 'rectangle' | 'circle' | 'triangle';
   fill: string;
 }) => (
-  <svg
-    width="100%"
-    height="100%"
-    viewBox="0 0 100 100"
-    preserveAspectRatio="none"
-    style={{ display: 'block' }}
-  >
-    {shape === 'circle' ? (
-      <ellipse cx="50" cy="50" rx="50" ry="50" fill={fill} />
-    ) : shape === 'triangle' ? (
-      <polygon points="50,0 100,100 0,100" fill={fill} />
-    ) : (
-      <rect width="100" height="100" fill={fill} />
-    )}
-  </svg>
+  <div
+    style={{
+      width: '100%',
+      height: '100%',
+      backgroundColor: fill,
+      borderRadius: shape === 'circle' ? '50%' : undefined,
+      clipPath: shape === 'triangle' ? 'polygon(50% 0%, 100% 100%, 0% 100%)' : undefined,
+    }}
+  />
 );
 
 const decodeHtmlContent = (value: string) => {
@@ -51,6 +50,33 @@ const decodeHtmlContent = (value: string) => {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&');
+};
+
+const getFontFamilyFromHtml = (value: string) => {
+  const match = value.match(/font-family:\s*(?:&quot;|["']|)?([^;"'&]+)(?:&quot;|["']|)?\s*[;"']/i);
+
+  if (!match?.[1]) return interFontFamily;
+
+  const font = match[1].trim();
+  return font === 'Inter' ? interFontFamily : font;
+};
+
+const getFontFamiliesFromSlides = (slides: Slide[]) => {
+  const families = new Set<string>();
+
+  for (const slide of slides) {
+    for (const element of slide.elements) {
+      if (element.type !== 'text') continue;
+
+      const match = element.content.match(
+        /font-family:\s*(?:&quot;|["']|)?([^;"'&]+)(?:&quot;|["']|)?\s*[;"']/i
+      );
+
+      if (match?.[1]) families.add(match[1].trim());
+    }
+  }
+
+  return [...families];
 };
 
 const getAnimationStyle = (
@@ -85,6 +111,42 @@ const getAnimationStyle = (
 };
 
 export const MyComposition = ({ slides = [] }: MyCompositionProps) => {
+  const [fontsReady, setFontsReady] = useState(false);
+
+  useEffect(() => {
+    const fontsToLoad = getFontFamiliesFromSlides(slides)
+      .map((family) => availableFonts.find((font) => font.fontFamily === family))
+      .filter((font): font is (typeof availableFonts)[number] => Boolean(font));
+
+    if (fontsToLoad.length === 0) {
+      setFontsReady(true);
+      return;
+    }
+
+    setFontsReady(false);
+    let cancelled = false;
+
+    Promise.all(
+      fontsToLoad.map(async (font) => {
+        const loadedFont = await font.load();
+        const fontLoad = loadedFont.loadFont();
+        await fontLoad.waitUntilDone();
+      })
+    )
+      .catch((error) => {
+        console.error('Unable to load Google font:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setFontsReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slides]);
+
+  if (!fontsReady) return null;
+
   if (slides.length === 0) {
     return (
       <AbsoluteFill className="items-center justify-center bg-black">
@@ -118,6 +180,7 @@ export const MyComposition = ({ slides = [] }: MyCompositionProps) => {
 const SlideView = ({ slide }: { slide: Slide }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const isGradientBackground = slide.backgroundColor.startsWith('linear-gradient(');
 
   // simple fade-in for the slide
   const opacity = interpolate(frame, [0, fps * 0.3], [0, 1], {
@@ -125,7 +188,20 @@ const SlideView = ({ slide }: { slide: Slide }) => {
   });
 
   return (
-    <AbsoluteFill style={{ opacity, backgroundColor: slide.backgroundColor || '#000000' }}>
+    <AbsoluteFill
+      style={{
+        opacity,
+        backgroundColor: isGradientBackground ? '#000000' : slide.backgroundColor || '#000000',
+        backgroundImage: slide.backgroundImage
+          ? `url("${slide.backgroundImage}")`
+          : isGradientBackground
+            ? slide.backgroundColor
+            : undefined,
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundSize: 'cover',
+      }}
+    >
       {slide.elements.map((el) => {
         if (el.type === 'text') {
           return (
@@ -148,8 +224,10 @@ const SlideView = ({ slide }: { slide: Slide }) => {
                 whiteSpace: 'pre-wrap',
                 padding: 8,
                 boxSizing: 'border-box',
+                overflow: 'hidden',
                 lineHeight: 1.2,
                 letterSpacing: 0,
+                fontFamily: getFontFamilyFromHtml(el.content),
                 ...getAnimationStyle(
                   el.animation,
                   frame,
@@ -223,6 +301,8 @@ const SlideView = ({ slide }: { slide: Slide }) => {
                 width: el.width,
                 height: el.height,
                 display: 'block',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
                 ...getAnimationStyle(
                   el.animation,
                   frame,
