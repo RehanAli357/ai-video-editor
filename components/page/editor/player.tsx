@@ -2,18 +2,28 @@
 
 import { MyComposition } from '@/remotion/composition';
 import { Player } from '@remotion/player';
-import { renderMediaOnWeb } from '@remotion/web-renderer';
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Download, FileDown, FileUp, ImagePlus, Link, Plus, Trash2, Palette, Clock } from 'lucide-react';import type { Slide } from './types/slide';
+import { Download, FileDown, FileUp, ImagePlus, Link, Plus, Trash2, Palette, Clock, Music } from 'lucide-react';
+import type { AudioTrack, Slide } from './types/slide';
 import { addImageElement, isImageFile, readImageFile } from './actions/image-actions';
 import { addSlide, removeSlide, updateSlide } from './actions/slide-actions';
 import { addShapeElement } from './actions/shape-actions';
 import { addTextElement } from './actions/text-actions';
-import LayersPanel from './layers-panel';
-import ShapeMenu from './shape-menu';
-import SlideCanvas from './slide-canvas';
 import type { ShapeType } from './types/slide';
+
+const LayersPanel = dynamic(() => import('./layers-panel'), {
+  loading: () => <div className="h-[420px] animate-pulse rounded-xl border border-line bg-surface/40" />,
+});
+
+const ShapeMenu = dynamic(() => import('./shape-menu'), {
+  loading: () => <div className="h-8 w-24 animate-pulse rounded-lg bg-surface" />,
+});
+
+const SlideCanvas = dynamic(() => import('./slide-canvas'), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-gray-950" />,
+});
 
 const dimensions = [
   { label: '1080p', width: 1920, height: 1080 },
@@ -47,6 +57,8 @@ const isSlide = (value: unknown): value is Slide => {
     return false;
   }
 
+  if (value.audio !== undefined && !isAudioTrack(value.audio)) return false;
+
   return value.elements.every((element) => {
     if (!isRecord(element) || typeof element.id !== 'string' || typeof element.type !== 'string') {
       return false;
@@ -59,6 +71,17 @@ const isSlide = (value: unknown): value is Slide => {
     return false;
   });
 };
+
+const isAudioTrack = (value: unknown): value is AudioTrack =>
+  isRecord(value) && typeof value.src === 'string' && value.src.length > 0;
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 
 const RemotionPlayer = () => {
   const searchParams = useSearchParams();
@@ -82,6 +105,13 @@ const RemotionPlayer = () => {
   const [gradientEnd, setGradientEnd] = useState('#3dd6b0');
   const [gradientAngle, setGradientAngle] = useState('135');
   const [projectFileError, setProjectFileError] = useState('');
+  const [projectAudio, setProjectAudio] = useState<AudioTrack>();
+  const [projectAudioUrl, setProjectAudioUrl] = useState('');
+  const [projectAudioError, setProjectAudioError] = useState('');
+  const [isUploadingProjectAudio, setIsUploadingProjectAudio] = useState(false);
+  const [isUploadingSlideAudio, setIsUploadingSlideAudio] = useState(false);
+  const [slideAudioUrl, setSlideAudioUrl] = useState('');
+  const [slideAudioError, setSlideAudioError] = useState('');
 
   const totalDuration = Math.max(
     Math.round(
@@ -219,6 +249,62 @@ const RemotionPlayer = () => {
     }
   };
 
+  const handleUploadAudio = async (file: File, scope: 'project' | 'slide') => {
+    if (!file.type.startsWith('audio/')) return;
+
+    const setUploading = scope === 'project' ? setIsUploadingProjectAudio : setIsUploadingSlideAudio;
+    setUploading(true);
+
+    try {
+      const src = await readFileAsDataUrl(file);
+      const track: AudioTrack = {
+        src,
+        srcPath: file.name,
+        name: file.name,
+      };
+
+      if (scope === 'project') {
+        setProjectAudio(track);
+        setProjectAudioError('');
+      } else if (selectedSlide) {
+        handleUpdateSlide({ ...selectedSlide, audio: track });
+        setSlideAudioError('');
+      }
+    } catch {
+      if (scope === 'project') setProjectAudioError('Unable to read this audio file.');
+      else setSlideAudioError('Unable to read this audio file.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const addAudioUrl = (scope: 'project' | 'slide') => {
+    const value = scope === 'project' ? projectAudioUrl.trim() : slideAudioUrl.trim();
+    const setError = scope === 'project' ? setProjectAudioError : setSlideAudioError;
+
+    try {
+      const parsedUrl = new URL(value);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Invalid audio URL');
+
+      const track: AudioTrack = { src: value, srcPath: value, name: value };
+      if (scope === 'project') {
+        setProjectAudio(track);
+        setProjectAudioUrl('');
+      } else if (selectedSlide) {
+        handleUpdateSlide({ ...selectedSlide, audio: track });
+        setSlideAudioUrl('');
+      }
+      setError('');
+    } catch {
+      setError('Enter a valid audio URL.');
+    }
+  };
+
+  const removeAudio = (scope: 'project' | 'slide') => {
+    if (scope === 'project') setProjectAudio(undefined);
+    else if (selectedSlide) handleUpdateSlide({ ...selectedSlide, audio: undefined });
+  };
+
   const handleRemoveSlide = (id: string) => {
     const next = removeSlide(slides, id);
 
@@ -235,8 +321,13 @@ const RemotionPlayer = () => {
     const exportSlides = slides.map((slide) => {
       const { backgroundImagePath, ...exportSlide } = slide;
 
+      const audio = slide.audio
+        ? { ...slide.audio, src: slide.audio.srcPath || (slide.audio.src.startsWith('data:') ? '' : slide.audio.src) }
+        : undefined;
+
       return {
         ...exportSlide,
+        audio,
         backgroundImage: backgroundImagePath ||
           (slide.backgroundImage?.startsWith('data:') ? '' : slide.backgroundImage),
         elements: slide.elements.map((element) => {
@@ -254,6 +345,9 @@ const RemotionPlayer = () => {
 
     const payload = {
       videoName: videoName.trim() || 'my-video',
+      audio: projectAudio
+        ? { ...projectAudio, src: projectAudio.srcPath || (projectAudio.src.startsWith('data:') ? '' : projectAudio.src) }
+        : undefined,
       slides: exportSlides,
       selectedDimension,
       totalDuration,
@@ -282,6 +376,7 @@ const RemotionPlayer = () => {
       }
 
       const importedSlides = project.slides;
+      const importedAudio = isAudioTrack(project.audio) ? project.audio : undefined;
       const selectedDimensionData = project.selectedDimension;
       const importedDimension = isRecord(selectedDimensionData)
         ? dimensions.find(
@@ -293,6 +388,7 @@ const RemotionPlayer = () => {
         : undefined;
 
       setSlides(importedSlides);
+      setProjectAudio(importedAudio);
       setSelectedSlideId(importedSlides[0]?.id ?? null);
       if (typeof project.videoName === 'string') setVideoName(project.videoName);
       if (importedDimension) setSelectedDimension(importedDimension);
@@ -312,6 +408,23 @@ const RemotionPlayer = () => {
       setRenderProgress(0);
 
       console.log('Starting video render...');
+      const toRenderSafeUrl = (src: string) =>
+        src.startsWith('data:') ? src : `/api/media?url=${encodeURIComponent(src)}`;
+
+      const renderSafeAudio = (audio?: AudioTrack): AudioTrack | undefined =>
+        audio ? { ...audio, src: toRenderSafeUrl(audio.src) } : undefined;
+
+      const renderSafeSlides = slides.map((slide) => ({
+        ...slide,
+        audio: renderSafeAudio(slide.audio),
+        backgroundImage: slide.backgroundImage ? toRenderSafeUrl(slide.backgroundImage) : slide.backgroundImage,
+        elements: slide.elements.map((el) =>
+          'src' in el ? { ...el, src: toRenderSafeUrl(el.src) } : el
+        ),
+      }));
+
+      const { renderMediaOnWeb } = await import('@remotion/web-renderer');
+
 
       const { getBlob } = await renderMediaOnWeb({
         composition: {
@@ -323,11 +436,13 @@ const RemotionPlayer = () => {
           durationInFrames: totalDuration,
           defaultProps: {
             slides: [],
+            audio: undefined,
           },
         },
 
         inputProps: {
-          slides,
+          audio: renderSafeAudio(projectAudio),
+          slides: renderSafeSlides,
         },
 
         videoCodec: 'h264',
@@ -382,8 +497,8 @@ const RemotionPlayer = () => {
             key={s.id}
             onClick={() => setSelectedSlideId(s.id)}
             className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${selectedSlideId === s.id
-                ? 'border-ink bg-ink text-surface'
-                : 'border-line bg-gray-950/60 text-ink'
+              ? 'border-ink bg-ink text-surface'
+              : 'border-line bg-gray-950/60 text-ink'
               }`}
           >
             {i + 1}. {s.name}
@@ -408,238 +523,280 @@ const RemotionPlayer = () => {
             onUpdateSlide={handleUpdateSlide}
           />
 
-         {selectedSlide && (
-  <div className="mt-3 rounded-xl border border-line bg-surface/60 p-2.5">
-    {/* Row 1: Background + Duration */}
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex flex-wrap items-center gap-2 rounded-lg bg-gray-950/50 px-2.5 py-1.5">
-        <Palette className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
+          {selectedSlide && (
+            <div className="mt-3 rounded-xl border border-line bg-surface/60 p-2.5">
+              {/* Row 1: Background + Duration */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-gray-950/50 px-2.5 py-1.5">
+                  <Palette className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
 
-        <div className="flex items-center rounded-md border border-line p-0.5 text-[11px]">
-          <button
-            type="button"
-            onClick={() => setBackgroundMode('solid')}
-            className={`rounded px-2 py-1 font-medium transition-colors ${
-              backgroundMode === 'solid'
-                ? 'bg-ink text-surface'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            Solid
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setBackgroundMode('gradient');
-              updateGradientBackground(gradientStart, gradientEnd, gradientAngle);
-            }}
-            className={`rounded px-2 py-1 font-medium transition-colors ${
-              backgroundMode === 'gradient'
-                ? 'bg-ink text-surface'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            Gradient
-          </button>
-        </div>
+                  <div className="flex items-center rounded-md border border-line p-0.5 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setBackgroundMode('solid')}
+                      className={`rounded px-2 py-1 font-medium transition-colors ${backgroundMode === 'solid'
+                          ? 'bg-ink text-surface'
+                          : 'text-ink-muted hover:text-ink'
+                        }`}
+                    >
+                      Solid
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBackgroundMode('gradient');
+                        updateGradientBackground(gradientStart, gradientEnd, gradientAngle);
+                      }}
+                      className={`rounded px-2 py-1 font-medium transition-colors ${backgroundMode === 'gradient'
+                          ? 'bg-ink text-surface'
+                          : 'text-ink-muted hover:text-ink'
+                        }`}
+                    >
+                      Gradient
+                    </button>
+                  </div>
 
-        <span className="h-5 w-px bg-line" />
+                  <span className="h-5 w-px bg-line" />
 
-        {backgroundMode === 'solid' ? (
-          <input
-            type="color"
-            value={selectedSlide.backgroundColor.startsWith('#') ? selectedSlide.backgroundColor : '#000000'}
-            onChange={(event) =>
-              handleUpdateSlide({ ...selectedSlide, backgroundColor: event.target.value })
-            }
-            title="Background color"
-            aria-label="Solid background color"
-            className="h-7 w-7 cursor-pointer appearance-none rounded-md border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
-          />
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="color"
-              value={gradientStart}
-              onChange={(event) => {
-                setGradientStart(event.target.value);
-                updateGradientBackground(event.target.value, gradientEnd, gradientAngle);
-              }}
-              title="Gradient start"
-              aria-label="Gradient start color"
-              className="h-7 w-7 cursor-pointer appearance-none rounded-md border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
-            />
-            <span className="text-ink-muted">→</span>
-            <input
-              type="color"
-              value={gradientEnd}
-              onChange={(event) => {
-                setGradientEnd(event.target.value);
-                updateGradientBackground(gradientStart, event.target.value, gradientAngle);
-              }}
-              title="Gradient end"
-              aria-label="Gradient end color"
-              className="h-7 w-7 cursor-pointer appearance-none rounded-md border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
-            />
-            <div className="flex items-center gap-1 rounded-md border border-line bg-gray-950/60 pl-2 pr-1 py-0.5">
-              <input
-                type="number"
-                min="0"
-                max="360"
-                value={gradientAngle}
-                onChange={(event) => {
-                  const angle = String(Math.min(360, Math.max(0, Number(event.target.value) || 0)));
-                  setGradientAngle(angle);
-                  updateGradientBackground(gradientStart, gradientEnd, angle);
-                }}
-                aria-label="Gradient angle in degrees"
-                className="w-9 bg-transparent text-[11px] text-ink outline-none"
-              />
-              <span className="text-[10px] text-ink-muted">deg</span>
+                  {backgroundMode === 'solid' ? (
+                    <input
+                      type="color"
+                      value={selectedSlide.backgroundColor.startsWith('#') ? selectedSlide.backgroundColor : '#000000'}
+                      onChange={(event) =>
+                        handleUpdateSlide({ ...selectedSlide, backgroundColor: event.target.value })
+                      }
+                      title="Background color"
+                      aria-label="Solid background color"
+                      className="h-7 w-7 cursor-pointer appearance-none rounded-md border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={gradientStart}
+                        onChange={(event) => {
+                          setGradientStart(event.target.value);
+                          updateGradientBackground(event.target.value, gradientEnd, gradientAngle);
+                        }}
+                        title="Gradient start"
+                        aria-label="Gradient start color"
+                        className="h-7 w-7 cursor-pointer appearance-none rounded-md border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
+                      />
+                      <span className="text-ink-muted">→</span>
+                      <input
+                        type="color"
+                        value={gradientEnd}
+                        onChange={(event) => {
+                          setGradientEnd(event.target.value);
+                          updateGradientBackground(gradientStart, event.target.value, gradientAngle);
+                        }}
+                        title="Gradient end"
+                        aria-label="Gradient end color"
+                        className="h-7 w-7 cursor-pointer appearance-none rounded-md border border-line bg-transparent p-0 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0"
+                      />
+                      <div className="flex items-center gap-1 rounded-md border border-line bg-gray-950/60 pl-2 pr-1 py-0.5">
+                        <input
+                          type="number"
+                          min="0"
+                          max="360"
+                          value={gradientAngle}
+                          onChange={(event) => {
+                            const angle = String(Math.min(360, Math.max(0, Number(event.target.value) || 0)));
+                            setGradientAngle(angle);
+                            updateGradientBackground(gradientStart, gradientEnd, angle);
+                          }}
+                          aria-label="Gradient angle in degrees"
+                          className="w-9 bg-transparent text-[11px] text-ink outline-none"
+                        />
+                        <span className="text-[10px] text-ink-muted">deg</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <span className="h-5 w-px bg-line" />
+
+                  <label className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2 text-[11px] font-medium text-ink-muted hover:bg-gray-900 hover:text-ink has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                    <ImagePlus className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{isUploadingBackgroundImage ? 'Uploading…' : 'Image'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingBackgroundImage}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void handleUploadBackgroundImage(file);
+                        event.currentTarget.value = '';
+                      }}
+                      className="sr-only"
+                    />
+                  </label>
+
+                  <div className="flex h-7 items-center gap-1 rounded-md border border-line bg-gray-950/60 pl-2 pr-0.5">
+                    <input
+                      type="url"
+                      value={backgroundImageUrl}
+                      placeholder="Background image URL"
+                      aria-label="Background image URL"
+                      onChange={(event) => {
+                        setBackgroundImageUrl(event.target.value);
+                        setBackgroundImageUrlError('');
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') handleAddBackgroundImageUrl();
+                      }}
+                      className="w-24 min-w-0 flex-shrink bg-transparent text-[11px] text-ink outline-none placeholder:text-ink-muted sm:w-36"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddBackgroundImageUrl}
+                      className="rounded px-1.5 py-1 text-[11px] font-medium text-ink hover:bg-gray-900"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+
+                <label className="flex h-9 items-center gap-1.5 rounded-lg bg-gray-950/50 px-2.5 text-[11px] font-medium text-ink-muted">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Duration</span>
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="60"
+                    step="0.5"
+                    value={selectedSlide.duration ?? DEFAULT_SLIDE_DURATION}
+                    aria-label="Slide duration in seconds"
+                    title="Slide duration in seconds"
+                    onChange={(event) =>
+                      handleUpdateSlide({
+                        ...selectedSlide,
+                        duration: Math.min(60, Math.max(0.5, Number(event.target.value) || 0.5)),
+                      })
+                    }
+                    className="w-10 rounded border border-line bg-gray-950/60 px-1 py-1 text-center text-[11px] text-ink"
+                  />
+                  <span>s</span>
+                </label>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-gray-950/50 px-2.5 py-1.5">
+                <Music className="h-3.5 w-3.5 text-ink-muted" />
+                <span className="text-[11px] font-medium text-ink-muted">Slide audio</span>
+                <label className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2 text-[11px] font-medium text-ink-muted hover:bg-gray-900 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                  <FileUp className="h-3.5 w-3.5" />
+                  {isUploadingSlideAudio ? 'Uploading…' : 'Upload'}
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    disabled={isUploadingSlideAudio}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void handleUploadAudio(file, 'slide');
+                      event.currentTarget.value = '';
+                    }}
+                    className="sr-only"
+                  />
+                </label>
+                <div className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-md border border-line bg-gray-950/60 pl-2 pr-0.5">
+                  <input
+                    type="url"
+                    value={slideAudioUrl}
+                    placeholder="Paste audio URL"
+                    aria-label="Slide audio URL"
+                    onChange={(event) => {
+                      setSlideAudioUrl(event.target.value);
+                      setSlideAudioError('');
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') addAudioUrl('slide');
+                    }}
+                    className="min-w-0 flex-1 bg-transparent text-[11px] text-ink outline-none placeholder:text-ink-muted"
+                  />
+                  <button type="button" onClick={() => addAudioUrl('slide')} className="rounded px-1.5 py-1 text-[11px] font-medium text-ink hover:bg-gray-900">
+                    Add
+                  </button>
+                </div>
+                {selectedSlide.audio && (
+                  <button type="button" onClick={() => removeAudio('slide')} className="rounded px-1.5 py-1 text-[11px] text-red-300 hover:bg-red-950/40">
+                    Remove {selectedSlide.audio.name ? `(${selectedSlide.audio.name})` : ''}
+                  </button>
+                )}
+              </div>
+
+              <div className="my-2.5 h-px bg-line" />
+
+              {/* Row 2: Insert elements + slide actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg bg-gray-950/50 p-1">
+                  <button
+                    onClick={handleAddText}
+                    className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-ink hover:bg-gray-900"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Text
+                  </button>
+
+                  <ShapeMenu onAdd={handleAddShape} disabled={!selectedSlide} />
+
+                  <label
+                    title="Upload image"
+                    className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-ink hover:bg-gray-900 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+                  >
+                    <ImagePlus className="h-3.5 w-3.5" />
+                    {isUploadingImage ? 'Uploading…' : 'Image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingImage}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleUploadImage(file);
+                        e.currentTarget.value = '';
+                      }}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex h-9 items-center gap-1 rounded-lg bg-gray-950/50 pl-2 pr-1">
+                  <Link className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
+                  <input
+                    type="url"
+                    value={imageUrl}
+                    placeholder="Paste image URL"
+                    aria-label="Image URL"
+                    onChange={(event) => {
+                      setImageUrl(event.target.value);
+                      setImageUrlError('');
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') handleAddImageUrl();
+                    }}
+                    className="w-24 min-w-0 flex-shrink bg-transparent px-1 text-xs text-ink outline-none placeholder:text-ink-muted sm:w-32"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddImageUrl}
+                    className="rounded-md px-2 py-1 text-xs font-medium text-ink hover:bg-gray-900"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => handleRemoveSlide(selectedSlide.id)}
+                  title="Delete slide"
+                  className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-red-950/40 hover:text-red-300"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+
+              {(imageUrlError || backgroundImageUrlError || slideAudioError) && (
+                <p className="mt-2 text-xs text-red-400">{imageUrlError || backgroundImageUrlError || slideAudioError}</p>
+              )}
             </div>
-          </div>
-        )}
-
-        <span className="h-5 w-px bg-line" />
-
-        <label className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2 text-[11px] font-medium text-ink-muted hover:bg-gray-900 hover:text-ink has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
-          <ImagePlus className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{isUploadingBackgroundImage ? 'Uploading…' : 'Image'}</span>
-          <input
-            type="file"
-            accept="image/*"
-            disabled={isUploadingBackgroundImage}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleUploadBackgroundImage(file);
-              event.currentTarget.value = '';
-            }}
-            className="sr-only"
-          />
-        </label>
-
-        <div className="flex h-7 items-center gap-1 rounded-md border border-line bg-gray-950/60 pl-2 pr-0.5">
-          <input
-            type="url"
-            value={backgroundImageUrl}
-            placeholder="Background image URL"
-            aria-label="Background image URL"
-            onChange={(event) => {
-              setBackgroundImageUrl(event.target.value);
-              setBackgroundImageUrlError('');
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') handleAddBackgroundImageUrl();
-            }}
-            className="w-24 min-w-0 flex-shrink bg-transparent text-[11px] text-ink outline-none placeholder:text-ink-muted sm:w-36"
-          />
-          <button
-            type="button"
-            onClick={handleAddBackgroundImageUrl}
-            className="rounded px-1.5 py-1 text-[11px] font-medium text-ink hover:bg-gray-900"
-          >
-            Add
-          </button>
-        </div>
-      </div>
-
-      <label className="flex h-9 items-center gap-1.5 rounded-lg bg-gray-950/50 px-2.5 text-[11px] font-medium text-ink-muted">
-        <Clock className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">Duration</span>
-        <input
-          type="number"
-          min="0.5"
-          max="60"
-          step="0.5"
-          value={selectedSlide.duration ?? DEFAULT_SLIDE_DURATION}
-          aria-label="Slide duration in seconds"
-          title="Slide duration in seconds"
-          onChange={(event) =>
-            handleUpdateSlide({
-              ...selectedSlide,
-              duration: Math.min(60, Math.max(0.5, Number(event.target.value) || 0.5)),
-            })
-          }
-          className="w-10 rounded border border-line bg-gray-950/60 px-1 py-1 text-center text-[11px] text-ink"
-        />
-        <span>s</span>
-      </label>
-    </div>
-
-    <div className="my-2.5 h-px bg-line" />
-
-    {/* Row 2: Insert elements + slide actions */}
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1 rounded-lg bg-gray-950/50 p-1">
-        <button
-          onClick={handleAddText}
-          className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-ink hover:bg-gray-900"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Text
-        </button>
-
-        <ShapeMenu onAdd={handleAddShape} disabled={!selectedSlide} />
-
-        <label
-          title="Upload image"
-          className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-ink hover:bg-gray-900 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
-        >
-          <ImagePlus className="h-3.5 w-3.5" />
-          {isUploadingImage ? 'Uploading…' : 'Image'}
-          <input
-            type="file"
-            accept="image/*"
-            disabled={isUploadingImage}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleUploadImage(file);
-              e.currentTarget.value = '';
-            }}
-            className="sr-only"
-          />
-        </label>
-      </div>
-
-      <div className="flex h-9 items-center gap-1 rounded-lg bg-gray-950/50 pl-2 pr-1">
-        <Link className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
-        <input
-          type="url"
-          value={imageUrl}
-          placeholder="Paste image URL"
-          aria-label="Image URL"
-          onChange={(event) => {
-            setImageUrl(event.target.value);
-            setImageUrlError('');
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') handleAddImageUrl();
-          }}
-          className="w-24 min-w-0 flex-shrink bg-transparent px-1 text-xs text-ink outline-none placeholder:text-ink-muted sm:w-32"
-        />
-        <button
-          type="button"
-          onClick={handleAddImageUrl}
-          className="rounded-md px-2 py-1 text-xs font-medium text-ink hover:bg-gray-900"
-        >
-          Add
-        </button>
-      </div>
-
-      <button
-        onClick={() => handleRemoveSlide(selectedSlide.id)}
-        title="Delete slide"
-        className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-red-950/40 hover:text-red-300"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
-    </div>
-
-    {(imageUrlError || backgroundImageUrlError) && (
-      <p className="mt-2 text-xs text-red-400">{imageUrlError || backgroundImageUrlError}</p>
-    )}
-  </div>
-)}
+          )}
         </div>
 
         <LayersPanel slide={selectedSlide} onUpdateSlide={handleUpdateSlide} />
@@ -665,6 +822,52 @@ const RemotionPlayer = () => {
             </option>
           ))}
         </select>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface/60 p-3">
+          <Music className="h-4 w-4 text-ink-muted" />
+          <span className="text-sm font-medium text-ink">Whole video audio</span>
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-medium text-ink hover:bg-gray-900 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+            <FileUp className="h-3.5 w-3.5" />
+            {isUploadingProjectAudio ? 'Uploading…' : 'Upload audio'}
+            <input
+              type="file"
+              accept="audio/*"
+              disabled={isUploadingProjectAudio}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleUploadAudio(file, 'project');
+                event.currentTarget.value = '';
+              }}
+              className="sr-only"
+            />
+          </label>
+          <div className="flex h-9 min-w-[220px] flex-1 items-center gap-1 rounded-lg border border-line bg-gray-950/60 pl-2 pr-1">
+            <Link className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
+            <input
+              type="url"
+              value={projectAudioUrl}
+              placeholder="Paste audio URL"
+              aria-label="Whole video audio URL"
+              onChange={(event) => {
+                setProjectAudioUrl(event.target.value);
+                setProjectAudioError('');
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') addAudioUrl('project');
+              }}
+              className="min-w-0 flex-1 bg-transparent px-1 text-xs text-ink outline-none placeholder:text-ink-muted"
+            />
+            <button type="button" onClick={() => addAudioUrl('project')} className="rounded-md px-2 py-1 text-xs font-medium text-ink hover:bg-gray-900">
+              Add
+            </button>
+          </div>
+          {projectAudio && (
+            <button type="button" onClick={() => removeAudio('project')} className="rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-950/40">
+              Remove {projectAudio.name ? `(${projectAudio.name})` : ''}
+            </button>
+          )}
+          {projectAudioError && <p className="basis-full text-xs text-red-400">{projectAudioError}</p>}
+        </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
           <button
@@ -742,6 +945,7 @@ const RemotionPlayer = () => {
           controls
           inputProps={{
             slides,
+            audio: projectAudio,
           }}
         />
       </div>

@@ -52,6 +52,12 @@ export interface ShapeElement {
 
 export type SlideElement = TextElement | ImageElement | ShapeElement;
 
+export interface AudioTrack {
+  src: string;
+  srcPath?: string;
+  name?: string;
+}
+
 export interface Slide {
   id: string;
   name: string;
@@ -59,6 +65,7 @@ export interface Slide {
   backgroundColor: string;
   backgroundImage?: string;
   backgroundImagePath?: string;
+  audio?: AudioTrack;
   elements: SlideElement[];
 }
 

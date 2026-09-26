@@ -2,7 +2,7 @@
   "_aiInstructions": {
     "purpose": "Generate a video project JSON that can be uploaded into this editor.",
     "requiredTopLevelFields": ["slides", "selectedDimension"],
-    "optionalTopLevelFields": ["videoName"],
+    "optionalTopLevelFields": ["videoName", "audio"],
     "supportedDimensions": [
       { "label": "1080p", "width": 1920, "height": 1080 },
       { "label": "720p", "width": 1280, "height": 720 },
@@ -55,6 +55,7 @@
       ]
     },
     "supportedAnimations": ["none", "fade", "slide-left", "slide-up", "zoom"],
+    "audioTrackFields": ["src", "name"],
     "textHtmlStyles": [
       "font-family (use any system font or Google Font from the editor font picker)",
       "font-size",
@@ -73,11 +74,17 @@
       "Set text fonts inside content, for example: <p style=\"font-family: 'Montserrat'; font-weight: 700;\">Heading</p>.",
       "Google Fonts are loaded automatically when their family name appears in text HTML.",
       "Coordinates and dimensions are measured in pixels.",
-      "Do not embed base64 or data URLs in media src values.",
-      "Video and audio elements are not supported by the current editor schema."
+      "Use an http or https URL for audio src so the imported project can render it.",
+      "Audio URLs must allow CORS requests from this editor so video downloads can include the audio.",
+      "Audio at the top level plays across the whole video; audio inside a slide plays only during that slide.",
+      "Do not embed base64 or data URLs in media src values."
     ]
   },
   "videoName": "ai-generated-story",
+  "audio": {
+    "name": "Whole video soundtrack",
+    "src": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+  },
   "slides": [
     {
       "id": "slide-intro",
@@ -137,6 +144,10 @@
       "name": "Image showcase",
       "duration": 5,
       "backgroundColor": "#f2eee6",
+      "audio": {
+        "name": "Slide audio example",
+        "src": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+      },
       "backgroundImage": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=1920&q=80",
       "elements": [
         {

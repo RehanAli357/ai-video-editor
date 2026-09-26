@@ -3,16 +3,16 @@ import {
   AbsoluteFill,
   Img,
   Sequence,
-  // Video,
   useVideoConfig,
   interpolate,
   useCurrentFrame,
 } from 'remotion';
 import { Gif } from '@remotion/gif';
+import { Audio } from '@remotion/media';
 import { getAvailableFonts } from '@remotion/google-fonts';
 import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
 import { useEffect, useState } from 'react';
-import type { AnimationType, Slide } from '../components/page/editor/types/slide';
+import type { AnimationType, AudioTrack, Slide } from '../components/page/editor/types/slide';
 
 const FPS = 30;
 const DEFAULT_SLIDE_DURATION = 3;
@@ -21,6 +21,7 @@ const availableFonts = getAvailableFonts();
 
 interface MyCompositionProps {
   slides?: Slide[];
+  audio?: AudioTrack;
 }
 
 const ShapeGraphic = ({
@@ -110,7 +111,7 @@ const getAnimationStyle = (
   }
 };
 
-export const MyComposition = ({ slides = [] }: MyCompositionProps) => {
+export const MyComposition = ({ slides = [], audio }: MyCompositionProps) => {
   const [fontsReady, setFontsReady] = useState(false);
 
   useEffect(() => {
@@ -159,6 +160,7 @@ export const MyComposition = ({ slides = [] }: MyCompositionProps) => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
+      {audio?.src && <Audio src={audio.src} />}
       {slides.map((slide) => {
         const durationInFrames = Math.max(
           1,
@@ -192,16 +194,23 @@ const SlideView = ({ slide }: { slide: Slide }) => {
       style={{
         opacity,
         backgroundColor: isGradientBackground ? '#000000' : slide.backgroundColor || '#000000',
-        backgroundImage: slide.backgroundImage
-          ? `url("${slide.backgroundImage}")`
-          : isGradientBackground
-            ? slide.backgroundColor
-            : undefined,
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundSize: 'cover',
+        backgroundImage:
+          !slide.backgroundImage && isGradientBackground ? slide.backgroundColor : undefined,
       }}
     >
+      {slide.audio?.src && <Audio src={slide.audio.src} />}
+      {slide.backgroundImage && (
+        <Img
+          src={slide.backgroundImage}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+      )}
       {slide.elements.map((el) => {
         if (el.type === 'text') {
           return (
