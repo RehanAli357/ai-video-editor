@@ -1,10 +1,6 @@
 'use client';
 import Link from 'next/link';
 import { Wand2, Layers, Clock3, Gauge, ArrowRight, Play, Check } from 'lucide-react';
-import { useModal } from '@/components/common/modal/modal-provider';
-import { AuthModal } from '@/components/modals/auth-modal/index';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 type Segment = { kind: 'captured' | 'generated'; width: string; label: string };
 
 const track: Segment[] = [
@@ -43,24 +39,6 @@ const features = [
 ];
 
 export default function LandingPage() {
-  const { openModal } = useModal();
-  const { data: session, status } = useSession();
-  const router = useRouter();
-  const handleDashboardClick = () => {
-    // Optional: avoid action while session is loading
-    if (status === 'loading') return;
-
-    if (session) {
-      router.push('/dashboard');
-      return;
-    }
-
-    openModal(<AuthModal />, {
-      size: 'xl',
-      closeOnBackdrop: true,
-    });
-  };
-
   return (
     <div className="min-h-screen bg-void">
       {/* ---------- Nav ---------- */}
@@ -80,12 +58,12 @@ export default function LandingPage() {
             Pricing
           </a>
         </nav>
-        <button
-          onClick={handleDashboardClick}
+        <Link
+          href="/dashboard"
           className="rounded-chip bg-surface-3 border border-line px-4 py-2 text-sm text-ink hover:border-synth transition-colors"
         >
           Open dashboard
-        </button>
+        </Link>
       </header>
 
       {/* ---------- Hero ---------- */}
