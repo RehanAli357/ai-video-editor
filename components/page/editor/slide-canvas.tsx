@@ -65,7 +65,7 @@ const SlideCanvas = ({ slide, width, height, onUpdateSlide }: SlideCanvasProps) 
             width,
             height,
             backgroundColor: isGradientBackground ? '#000000' : slide.backgroundColor,
-            backgroundImage: slide.backgroundImage
+            backgroundImage: slide.backgroundImage && !slide.backgroundVideo
               ? `url("${slide.backgroundImage}")`
               : isGradientBackground
                 ? slide.backgroundColor
@@ -76,6 +76,17 @@ const SlideCanvas = ({ slide, width, height, onUpdateSlide }: SlideCanvasProps) 
             transform: `scale(${scale})`,
           }}
         >
+          {slide.backgroundVideo && (
+            <video
+              src={slide.backgroundVideo}
+              autoPlay
+              loop
+              muted
+              playsInline
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            />
+          )}
           {slide.elements.map((el) => (
             <CanvasElement
               key={el.id}

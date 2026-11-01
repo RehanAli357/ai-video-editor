@@ -1,17 +1,19 @@
 'use client';
 
-import { MyComposition } from '@/remotion/composition';
+import { getTotalDurationInFrames, MyComposition } from '@/remotion/composition';
 import { Player } from '@remotion/player';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Download, FileDown, FileUp, ImagePlus, Link, Plus, Trash2, Palette, Clock, Music } from 'lucide-react';
-import type { AudioTrack, Slide } from './types/slide';
+import { Copy, Download, FileDown, FileUp, ImagePlus, Link, Plus, Trash2, Palette, Clock, Music, Video as VideoIcon } from 'lucide-react';
+import type { AudioTrack, Slide, SlideTransitionType } from './types/slide';
 import { addImageElement, isImageFile, readImageFile } from './actions/image-actions';
 import { addSlide, removeSlide, updateSlide } from './actions/slide-actions';
 import { addShapeElement } from './actions/shape-actions';
 import { addTextElement } from './actions/text-actions';
 import type { ShapeType } from './types/slide';
+import PixabayMediaSearch from './pixabay-media-search';
+import { createVideoElement } from './types/slide';
 
 const LayersPanel = dynamic(() => import('./layers-panel'), {
   loading: () => <div className="h-[420px] animate-pulse rounded-xl border border-line bg-surface/40" />,
@@ -29,11 +31,24 @@ const dimensions = [
   { label: '1080p', width: 1920, height: 1080 },
   { label: '720p', width: 1280, height: 720 },
   { label: 'Square', width: 1080, height: 1080 },
+  { label: 'Reels', width: 1080, height: 1920 },
 ];
 
 const FPS = 30;
 const DEFAULT_SLIDE_DURATION = 3;
 type BackgroundMode = 'solid' | 'gradient';
+
+const slideTransitionOptions: { value: SlideTransitionType; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'fade', label: 'Fade' },
+  { value: 'slide-left', label: 'Slide left' },
+  { value: 'slide-right', label: 'Slide right' },
+  { value: 'slide-up', label: 'Slide up' },
+  { value: 'slide-down', label: 'Slide down' },
+  { value: 'zoom', label: 'Zoom' },
+  { value: 'wipe-left', label: 'Wipe left' },
+  { value: 'wipe-right', label: 'Wipe right' },
+];
 
 const getGradientSettings = (value: string) => {
   const match = value.match(
@@ -48,6 +63,9 @@ const getGradientSettings = (value: string) => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+const isSlideTransitionType = (value: unknown): value is SlideTransitionType =>
+  slideTransitionOptions.some((option) => option.value === value);
+
 const isSlide = (value: unknown): value is Slide => {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string') {
     return false;
@@ -57,6 +75,8 @@ const isSlide = (value: unknown): value is Slide => {
     return false;
   }
 
+  if (value.transition !== undefined && !isSlideTransitionType(value.transition)) return false;
+  if (value.backgroundVideo !== undefined && typeof value.backgroundVideo !== 'string') return false;
   if (value.audio !== undefined && !isAudioTrack(value.audio)) return false;
 
   return value.elements.every((element) => {
@@ -66,6 +86,7 @@ const isSlide = (value: unknown): value is Slide => {
 
     if (element.type === 'text') return typeof element.content === 'string';
     if (element.type === 'image') return typeof element.src === 'string';
+    if (element.type === 'video') return typeof element.src === 'string';
     if (element.type === 'shape') return typeof element.shape === 'string';
 
     return false;
@@ -96,10 +117,13 @@ const RemotionPlayer = () => {
   const [renderProgress, setRenderProgress] = useState(0);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isUploadingBackgroundImage, setIsUploadingBackgroundImage] = useState(false);
+  const [isUploadingBackgroundVideo, setIsUploadingBackgroundVideo] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [imageUrlError, setImageUrlError] = useState('');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState('');
   const [backgroundImageUrlError, setBackgroundImageUrlError] = useState('');
+  const [backgroundVideoUrl, setBackgroundVideoUrl] = useState('');
+  const [backgroundVideoUrlError, setBackgroundVideoUrlError] = useState('');
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>('solid');
   const [gradientStart, setGradientStart] = useState('#101827');
   const [gradientEnd, setGradientEnd] = useState('#3dd6b0');
@@ -113,17 +137,10 @@ const RemotionPlayer = () => {
   const [slideAudioUrl, setSlideAudioUrl] = useState('');
   const [slideAudioError, setSlideAudioError] = useState('');
 
-  const totalDuration = Math.max(
-    Math.round(
-      slides.reduce(
-        (total, slide) => total + Math.max(0.5, slide.duration ?? DEFAULT_SLIDE_DURATION) * FPS,
-        0
-      )
-    ),
-    FPS
-  );
+  const totalDuration = getTotalDurationInFrames(slides);
 
   const selectedSlide = slides.find((s) => s.id === selectedSlideId);
+  const selectedSlideIndex = slides.findIndex((slide) => slide.id === selectedSlideId);
 
   useEffect(() => {
     if (!selectedSlide) return;
@@ -153,8 +170,41 @@ const RemotionPlayer = () => {
     setSelectedSlideId(result.slide.id);
   };
 
+  const handleDuplicateSlide = () => {
+    if (!selectedSlide) return;
+
+    const duplicatedSlide: Slide = {
+      ...selectedSlide,
+      id: crypto.randomUUID(),
+      name: `${selectedSlide.name} copy`,
+      audio: selectedSlide.audio ? { ...selectedSlide.audio } : undefined,
+      elements: selectedSlide.elements.map((element) => ({
+        ...element,
+        id: crypto.randomUUID(),
+      })),
+    };
+
+    setSlides((current) => {
+      const index = current.findIndex((slide) => slide.id === selectedSlide.id);
+      if (index < 0) return current;
+
+      return [
+        ...current.slice(0, index + 1),
+        duplicatedSlide,
+        ...current.slice(index + 1),
+      ];
+    });
+    setSelectedSlideId(duplicatedSlide.id);
+  };
+
   const handleUpdateSlide = (updated: Slide) => {
     setSlides((current) => updateSlide(current, updated));
+  };
+
+  const handleTransitionChange = (slideId: string, transition: SlideTransitionType) => {
+    setSlides((current) =>
+      current.map((slide) => (slide.id === slideId ? { ...slide, transition } : slide))
+    );
   };
 
   const handleAddText = () => {
@@ -205,6 +255,53 @@ const RemotionPlayer = () => {
     }
   };
 
+  const handleAddPixabayImage = (imageUrl: string, mimeType: string) => {
+    if (!selectedSlide) return;
+    handleUpdateSlide(addImageElement(selectedSlide, imageUrl, mimeType, imageUrl));
+  };
+
+  const handleSetPixabayImageBackground = (imageUrl: string) => {
+    if (!selectedSlide) return;
+    handleUpdateSlide({
+      ...selectedSlide,
+      backgroundImage: imageUrl,
+      backgroundImagePath: imageUrl,
+      backgroundVideo: undefined,
+      backgroundVideoPath: undefined,
+    });
+  };
+
+  const handleSetPixabayVideoBackground = (videoUrl: string) => {
+    if (!selectedSlide) return;
+    handleUpdateSlide({
+      ...selectedSlide,
+      backgroundImage: undefined,
+      backgroundImagePath: undefined,
+      backgroundVideo: videoUrl,
+      backgroundVideoPath: videoUrl,
+    });
+  };
+
+  const handleRemoveBackgroundVideo = () => {
+    if (!selectedSlide) return;
+
+    handleUpdateSlide({
+      ...selectedSlide,
+      backgroundVideo: undefined,
+      backgroundVideoPath: undefined,
+    });
+    setBackgroundVideoUrl('');
+    setBackgroundVideoUrlError('');
+  };
+
+  const handleAddPixabayVideoLayer = (videoUrl: string) => {
+    if (!selectedSlide) return;
+    handleUpdateSlide({
+      ...selectedSlide,
+      elements: [...selectedSlide.elements, createVideoElement(videoUrl, videoUrl)],
+    });
+  };
+
   const handleUploadBackgroundImage = async (file: File) => {
     if (!selectedSlide || !isImageFile(file)) return;
 
@@ -216,6 +313,8 @@ const RemotionPlayer = () => {
         ...selectedSlide,
         backgroundImage,
         backgroundImagePath: file.webkitRelativePath || file.name,
+        backgroundVideo: undefined,
+        backgroundVideoPath: undefined,
       });
       setBackgroundImageUrlError('');
     } catch (error) {
@@ -241,11 +340,64 @@ const RemotionPlayer = () => {
         ...selectedSlide,
         backgroundImage: src,
         backgroundImagePath: src,
+        backgroundVideo: undefined,
+        backgroundVideoPath: undefined,
       });
       setBackgroundImageUrl('');
       setBackgroundImageUrlError('');
     } catch {
       setBackgroundImageUrlError('Enter a valid image URL.');
+    }
+  };
+
+  const handleUploadBackgroundVideo = async (file: File) => {
+    if (!selectedSlide || !file.type.startsWith('video/')) {
+      setBackgroundVideoUrlError('Choose a valid video file.');
+      return;
+    }
+
+    setIsUploadingBackgroundVideo(true);
+
+    try {
+      const backgroundVideo = await readFileAsDataUrl(file);
+      handleUpdateSlide({
+        ...selectedSlide,
+        backgroundImage: undefined,
+        backgroundImagePath: undefined,
+        backgroundVideo,
+        backgroundVideoPath: file.webkitRelativePath || file.name,
+      });
+      setBackgroundVideoUrlError('');
+    } catch {
+      setBackgroundVideoUrlError('Unable to read this video file.');
+    } finally {
+      setIsUploadingBackgroundVideo(false);
+    }
+  };
+
+  const handleAddBackgroundVideoUrl = () => {
+    if (!selectedSlide) return;
+
+    const src = backgroundVideoUrl.trim();
+
+    try {
+      const parsedUrl = new URL(src);
+
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        throw new Error('Invalid video URL');
+      }
+
+      handleUpdateSlide({
+        ...selectedSlide,
+        backgroundImage: undefined,
+        backgroundImagePath: undefined,
+        backgroundVideo: src,
+        backgroundVideoPath: src,
+      });
+      setBackgroundVideoUrl('');
+      setBackgroundVideoUrlError('');
+    } catch {
+      setBackgroundVideoUrlError('Enter a valid video URL.');
     }
   };
 
@@ -319,7 +471,7 @@ const RemotionPlayer = () => {
     if (slides.length === 0) return;
 
     const exportSlides = slides.map((slide) => {
-      const { backgroundImagePath, ...exportSlide } = slide;
+      const { backgroundImagePath, backgroundVideoPath, ...exportSlide } = slide;
 
       const audio = slide.audio
         ? { ...slide.audio, src: slide.audio.srcPath || (slide.audio.src.startsWith('data:') ? '' : slide.audio.src) }
@@ -330,6 +482,8 @@ const RemotionPlayer = () => {
         audio,
         backgroundImage: backgroundImagePath ||
           (slide.backgroundImage?.startsWith('data:') ? '' : slide.backgroundImage),
+        backgroundVideo: backgroundVideoPath ||
+          (slide.backgroundVideo?.startsWith('data:') ? '' : slide.backgroundVideo),
         elements: slide.elements.map((element) => {
           if (!('src' in element)) return element;
 
@@ -418,6 +572,7 @@ const RemotionPlayer = () => {
         ...slide,
         audio: renderSafeAudio(slide.audio),
         backgroundImage: slide.backgroundImage ? toRenderSafeUrl(slide.backgroundImage) : slide.backgroundImage,
+        backgroundVideo: slide.backgroundVideo ? toRenderSafeUrl(slide.backgroundVideo) : slide.backgroundVideo,
         elements: slide.elements.map((el) =>
           'src' in el ? { ...el, src: toRenderSafeUrl(el.src) } : el
         ),
@@ -482,9 +637,9 @@ const RemotionPlayer = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 m-6">
       <div>
-        <h1 className="text-xl font-semibold text-ink">{videoName} Video Editor</h1>
+        <h1 className="text-xl font-semibold text-ink">{videoName}</h1>
 
         <p className="text-sm text-ink-muted">
           Click, drag, resize, and style text directly on the canvas.
@@ -514,6 +669,40 @@ const RemotionPlayer = () => {
         </button>
       </div>
 
+      {slides.length > 1 && selectedSlide && (
+        <section
+          className="rounded-xl border border-line bg-surface/60 p-3"
+          aria-label="Active slide transition"
+        >
+          <h2 className="mb-2 text-xs font-semibold text-ink">
+            Transition into {selectedSlide.name}
+          </h2>
+          {selectedSlideIndex === 0 ? (
+            <p className="text-xs text-ink-muted">The first slide has no incoming transition.</p>
+          ) : (
+            <label className="flex w-fit items-center gap-2 rounded-lg border border-line bg-gray-950/60 px-2.5 py-2 text-xs text-ink-muted">
+              <span>
+                {selectedSlideIndex} → {selectedSlideIndex + 1}
+              </span>
+              <select
+                aria-label={`Transition into slide ${selectedSlideIndex + 1}`}
+                value={selectedSlide.transition ?? 'fade'}
+                onChange={(event) =>
+                  handleTransitionChange(selectedSlide.id, event.target.value as SlideTransitionType)
+                }
+                className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink"
+              >
+                {slideTransitionOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </section>
+      )}
+
       <div className="grid gap-4 rounded-xl bg-gray-950 p-4 md:grid-cols-[minmax(0,1fr)_240px]">
         <div className="min-w-0">
           <SlideCanvas
@@ -535,8 +724,8 @@ const RemotionPlayer = () => {
                       type="button"
                       onClick={() => setBackgroundMode('solid')}
                       className={`rounded px-2 py-1 font-medium transition-colors ${backgroundMode === 'solid'
-                          ? 'bg-ink text-surface'
-                          : 'text-ink-muted hover:text-ink'
+                        ? 'bg-ink text-surface'
+                        : 'text-ink-muted hover:text-ink'
                         }`}
                     >
                       Solid
@@ -548,8 +737,8 @@ const RemotionPlayer = () => {
                         updateGradientBackground(gradientStart, gradientEnd, gradientAngle);
                       }}
                       className={`rounded px-2 py-1 font-medium transition-colors ${backgroundMode === 'gradient'
-                          ? 'bg-ink text-surface'
-                          : 'text-ink-muted hover:text-ink'
+                        ? 'bg-ink text-surface'
+                        : 'text-ink-muted hover:text-ink'
                         }`}
                     >
                       Gradient
@@ -654,6 +843,58 @@ const RemotionPlayer = () => {
                       Add
                     </button>
                   </div>
+
+                  <label className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-line px-2 text-[11px] font-medium text-ink-muted hover:bg-gray-900 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                    <VideoIcon className="h-3.5 w-3.5" />
+                    <span>{isUploadingBackgroundVideo ? 'Importing…' : 'Video'}</span>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      disabled={isUploadingBackgroundVideo}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void handleUploadBackgroundVideo(file);
+                        event.currentTarget.value = '';
+                      }}
+                      className="sr-only"
+                    />
+                  </label>
+
+                  <div className="flex h-7 items-center gap-1 rounded-md border border-line bg-gray-950/60 pl-2 pr-0.5">
+                    <input
+                      type="url"
+                      value={backgroundVideoUrl}
+                      placeholder="Background video URL"
+                      aria-label="Background video URL"
+                      onChange={(event) => {
+                        setBackgroundVideoUrl(event.target.value);
+                        setBackgroundVideoUrlError('');
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') handleAddBackgroundVideoUrl();
+                      }}
+                      className="w-24 min-w-0 flex-shrink bg-transparent text-[11px] text-ink outline-none placeholder:text-ink-muted sm:w-36"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddBackgroundVideoUrl}
+                      className="rounded px-1.5 py-1 text-[11px] font-medium text-ink hover:bg-gray-900"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {selectedSlide.backgroundVideo && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveBackgroundVideo}
+                      title="Remove background video"
+                      aria-label="Remove background video"
+                      className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-red-300 hover:bg-red-950/40"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove video
+                    </button>
+                  )}
                 </div>
 
                 <label className="flex h-9 items-center gap-1.5 rounded-lg bg-gray-950/50 px-2.5 text-[11px] font-medium text-ink-muted">
@@ -757,7 +998,6 @@ const RemotionPlayer = () => {
                     />
                   </label>
                 </div>
-
                 <div className="flex h-9 items-center gap-1 rounded-lg bg-gray-950/50 pl-2 pr-1">
                   <Link className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
                   <input
@@ -784,16 +1024,35 @@ const RemotionPlayer = () => {
                 </div>
 
                 <button
+                  type="button"
+                  onClick={handleDuplicateSlide}
+                  disabled={!selectedSlide}
+                  title="Duplicate slide"
+                  aria-label="Duplicate slide"
+                  className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-gray-900 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+
+                <button
                   onClick={() => handleRemoveSlide(selectedSlide.id)}
                   title="Delete slide"
-                  className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-red-950/40 hover:text-red-300"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-red-950/40 hover:text-red-300"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
 
-              {(imageUrlError || backgroundImageUrlError || slideAudioError) && (
-                <p className="mt-2 text-xs text-red-400">{imageUrlError || backgroundImageUrlError || slideAudioError}</p>
+              <PixabayMediaSearch
+                disabled={!selectedSlide}
+                onAddImage={(result) => handleAddPixabayImage(result.mediaUrl, result.mimeType)}
+                onSetImageBackground={(result) => handleSetPixabayImageBackground(result.mediaUrl)}
+                onSetVideoBackground={(result) => handleSetPixabayVideoBackground(result.mediaUrl)}
+                onAddVideoLayer={(result) => handleAddPixabayVideoLayer(result.mediaUrl)}
+              />
+
+              {(imageUrlError || backgroundImageUrlError || backgroundVideoUrlError || slideAudioError) && (
+                <p className="mt-2 text-xs text-red-400">{imageUrlError || backgroundImageUrlError || backgroundVideoUrlError || slideAudioError}</p>
               )}
             </div>
           )}
@@ -801,7 +1060,7 @@ const RemotionPlayer = () => {
 
         <LayersPanel slide={selectedSlide} onUpdateSlide={handleUpdateSlide} />
       </div>
-
+      {/* SPIT THIS */}
       <div>
         <label className="mb-2 block text-sm font-medium text-ink">Dimension</label>
 
@@ -915,7 +1174,7 @@ const RemotionPlayer = () => {
 
         {projectFileError && <p className="mt-2 text-xs text-red-400">{projectFileError}</p>}
       </div>
-
+      {/* SPIT THIS */}
       {isRendering && (
         <div className="rounded-lg border border-line bg-surface p-3">
           <div className="mb-2 flex justify-between text-xs">
@@ -935,20 +1194,43 @@ const RemotionPlayer = () => {
         </div>
       )}
 
-      <div className="flex items-center justify-center rounded-xl bg-gray-950 p-4">
-        <Player
-          component={MyComposition}
-          durationInFrames={totalDuration}
-          compositionWidth={selectedDimension.width}
-          compositionHeight={selectedDimension.height}
-          fps={FPS}
-          controls
-          inputProps={{
-            slides,
-            audio: projectAudio,
-          }}
-        />
-      </div>
+      <section className="rounded-2xl border border-line bg-surface/60 p-4 sm:p-5" aria-label="Video preview">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Video preview</h2>
+            <p className="mt-0.5 text-xs text-ink-muted">
+              Review your video at its selected export size.
+            </p>
+          </div>
+          <span className="rounded-full border border-line bg-gray-950/60 px-2.5 py-1 text-xs font-medium text-ink-muted">
+            {selectedDimension.label} · {selectedDimension.width} × {selectedDimension.height}
+          </span>
+        </div>
+
+        <div className="flex min-h-[280px] items-center justify-center overflow-hidden rounded-xl bg-gray-950 p-4 sm:p-6">
+          <div
+            className="overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10"
+            style={{
+              width: `min(100%, ${(selectedDimension.width / selectedDimension.height) * 70}vh)`,
+              aspectRatio: `${selectedDimension.width} / ${selectedDimension.height}`,
+            }}
+          >
+            <Player
+              component={MyComposition}
+              durationInFrames={totalDuration}
+              compositionWidth={selectedDimension.width}
+              compositionHeight={selectedDimension.height}
+              fps={FPS}
+              controls
+              style={{ width: '100%' }}
+              inputProps={{
+                slides,
+                audio: projectAudio,
+              }}
+            />
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
