@@ -43,6 +43,8 @@ const SlideElementEditor = ({ element, onUpdate, onRemove }: SlideElementEditorP
         </>
       ) : element.type === 'image' ? (
         <img src={element.src} alt="Uploaded slide asset" className="h-16 w-full object-cover" />
+      ) : element.type === 'video' ? (
+        <video src={element.src} muted playsInline className="h-16 w-full object-cover" />
       ) : (
         <>
           <div

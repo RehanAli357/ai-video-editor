@@ -9,6 +9,7 @@ import {
   delayRender,
 } from 'remotion';
 import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
+import { Video } from '@remotion/media';
 import { useEffect, useState } from 'react';
 import type { AnimationType, Slide } from './types/slide';
 
@@ -186,6 +187,13 @@ const SlideView = ({ slide }: { slide: Slide }) => {
               dangerouslySetInnerHTML={{
                 __html: decodeHtmlContent(el.content),
               }}
+            />
+          ) : el.type === 'video' ? (
+            <Video
+              src={el.src}
+              muted
+              loop
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'block' }}>

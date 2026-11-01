@@ -1,56 +1,99 @@
-export type ShapeType = 'rectangle' | 'circle' | 'triangle';
-export type AnimationType = 'none' | 'fade' | 'slide-left' | 'slide-up' | 'zoom';
-export type SlideElementType = 'text' | 'image' | 'shape';
+export type AnimationType =
+  | 'none'
+  | 'fade'
+  | 'slide-left'
+  | 'slide-right'
+  | 'slide-up'
+  | 'slide-down'
+  | 'zoom' // kept for backward compatibility (same as zoom-in)
+  | 'zoom-in'
+  | 'zoom-out'
+  | 'pop'
+  | 'drop'
+  | 'rotate'
+  | 'blur'
+  | 'flip-x'
+  | 'flip-y'
+  | 'wipe-left'
+  | 'wipe-right'
+  | 'typewriter';
 
-export interface TextElement {
+export type EmphasisType = 'none' | 'pulse' | 'float' | 'shake' | 'wiggle' | 'spin';
+
+export type ShapeType = 'rectangle' | 'circle' | 'triangle';
+export type SlideElementType = 'text' | 'image' | 'video' | 'shape';
+
+export type SlideTransitionType =
+  | 'none'
+  | 'fade'
+  | 'slide-left'
+  | 'slide-right'
+  | 'slide-up'
+  | 'slide-down'
+  | 'zoom'
+  | 'wipe-left'
+  | 'wipe-right';
+
+export type EasingType =
+  | 'linear'
+  | 'ease-in'
+  | 'ease-out'
+  | 'ease-in-out'
+  | 'back'
+  | 'bounce'
+  | 'elastic';
+
+// Shared by every element type, so you stop repeating these fields
+interface BaseElement {
   id: string;
-  type: 'text';
   label?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+
+  // Entrance
   animation?: AnimationType;
-  animationDuration?: number;
-  animationDelay?: number;
+  animationDuration?: number; // seconds, default 0.6
+  animationDelay?: number; // seconds, default 0
+  animationEasing?: EasingType;
+
+  // Exit (plays at the end of the slide)
+  exitAnimation?: AnimationType;
+  exitDuration?: number; // seconds, default 0.5
+
+  // Looping effect after the entrance finishes
+  emphasis?: EmphasisType;
+}
+
+export interface TextElement extends BaseElement {
+  type: 'text';
   content: string;
   color?: string;
   fontSize?: number;
   fontWeight?: 'normal' | 'bold';
-  x: number;
-  y: number;
-  width: number;
-  height: number;
 }
 
-export interface ImageElement {
-  id: string;
+export interface ImageElement extends BaseElement {
   type: 'image';
-  label?: string;
-  animation?: AnimationType;
-  animationDuration?: number;
-  animationDelay?: number;
   src: string;
   srcPath?: string;
   mimeType?: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
 }
 
-export interface ShapeElement {
-  id: string;
+export interface VideoElement extends BaseElement {
+  type: 'video';
+  src: string;
+  srcPath?: string;
+}
+
+export interface ShapeElement extends BaseElement {
   type: 'shape';
-  label?: string;
-  animation?: AnimationType;
-  animationDuration?: number;
-  animationDelay?: number;
   shape: ShapeType;
   fill: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
 }
 
-export type SlideElement = TextElement | ImageElement | ShapeElement;
+export type SlideElement = TextElement | ImageElement | VideoElement | ShapeElement;
 
 export interface AudioTrack {
   src: string;
@@ -62,9 +105,12 @@ export interface Slide {
   id: string;
   name: string;
   duration?: number;
+  transition?: SlideTransitionType;
   backgroundColor: string;
   backgroundImage?: string;
   backgroundImagePath?: string;
+  backgroundVideo?: string;
+  backgroundVideoPath?: string;
   audio?: AudioTrack;
   elements: SlideElement[];
 }
@@ -77,7 +123,7 @@ export const createEmptySlide = (index: number): Slide => ({
   elements: [],
 });
 
-export const createTextElement = (): SlideElement => ({
+export const createTextElement = (): TextElement => ({
   id: crypto.randomUUID(),
   type: 'text',
   content: '<p style="font-size: 32px;">New text</p>',
@@ -103,7 +149,18 @@ export const createImageElement = (
   height: 360,
 });
 
-export const  createShapeElement = (shape: ShapeType): ShapeElement => ({
+export const createVideoElement = (src: string, srcPath?: string): VideoElement => ({
+  id: crypto.randomUUID(),
+  type: 'video',
+  src,
+  srcPath,
+  x: 80,
+  y: 80,
+  width: 640,
+  height: 360,
+});
+
+export const createShapeElement = (shape: ShapeType): ShapeElement => ({
   id: crypto.randomUUID(),
   type: 'shape',
   shape,

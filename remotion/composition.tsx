@@ -8,14 +8,20 @@ import {
   useCurrentFrame,
 } from 'remotion';
 import { Gif } from '@remotion/gif';
-import { Audio } from '@remotion/media';
+import { Audio, Video } from '@remotion/media';
 import { getAvailableFonts } from '@remotion/google-fonts';
 import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
 import { useEffect, useState } from 'react';
-import type { AnimationType, AudioTrack, Slide } from '../components/page/editor/types/slide';
+import type {
+  AudioTrack,
+  Slide,
+  SlideTransitionType,
+} from '../components/page/editor/types/slide';
+import { getElementAnimationStyle } from '../components/page/editor/actions/animation-actions';
 
 const FPS = 30;
 const DEFAULT_SLIDE_DURATION = 3;
+const SLIDE_TRANSITION_DURATION_IN_FRAMES = Math.round(FPS * 0.3);
 const { fontFamily: interFontFamily } = loadInter();
 const availableFonts = getAvailableFonts();
 
@@ -23,6 +29,39 @@ interface MyCompositionProps {
   slides?: Slide[];
   audio?: AudioTrack;
 }
+
+const getSlideDurationInFrames = (slide: Slide) =>
+  Math.max(1, Math.round(Math.max(0.5, slide.duration ?? DEFAULT_SLIDE_DURATION) * FPS));
+
+const getTransitionType = (transition: SlideTransitionType | undefined) => transition ?? 'fade';
+
+const getTransitionDurationInFrames = (
+  transition: SlideTransitionType | undefined,
+  fromSlide?: Slide,
+  toSlide?: Slide
+) => {
+  if (getTransitionType(transition) === 'none') return 0;
+
+  return Math.min(
+    SLIDE_TRANSITION_DURATION_IN_FRAMES,
+    fromSlide ? Math.floor(getSlideDurationInFrames(fromSlide) / 2) : Infinity,
+    toSlide ? Math.floor(getSlideDurationInFrames(toSlide) / 2) : Infinity
+  );
+};
+
+export const getTotalDurationInFrames = (slides: Slide[]) => {
+  const totalFrames = slides.reduce(
+    (total, slide) => total + getSlideDurationInFrames(slide),
+    0
+  );
+  const transitionFrames = slides.slice(1).reduce(
+    (total, slide, index) =>
+      total + getTransitionDurationInFrames(slide.transition, slides[index], slide),
+    0
+  );
+
+  return slides.length === 0 ? FPS : Math.max(1, totalFrames - transitionFrames);
+};
 
 const ShapeGraphic = ({
   shape,
@@ -80,37 +119,6 @@ const getFontFamiliesFromSlides = (slides: Slide[]) => {
   return [...families];
 };
 
-const getAnimationStyle = (
-  animation: AnimationType | undefined,
-  frame: number,
-  fps: number,
-  duration = 0.5,
-  delay = 0
-) => {
-  const progress = interpolate(
-    frame,
-    [delay * fps, delay * fps + Math.max(1, duration * fps)],
-    [0, 1],
-    {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-    }
-  );
-
-  switch (animation ?? 'none') {
-    case 'fade':
-      return { opacity: progress };
-    case 'slide-left':
-      return { opacity: progress, transform: `translateX(${(1 - progress) * -120}px)` };
-    case 'slide-up':
-      return { opacity: progress, transform: `translateY(${(1 - progress) * 120}px)` };
-    case 'zoom':
-      return { opacity: progress, transform: `scale(${0.7 + progress * 0.3})` };
-    default:
-      return {};
-  }
-};
-
 export const MyComposition = ({ slides = [], audio }: MyCompositionProps) => {
   const [fontsReady, setFontsReady] = useState(false);
 
@@ -161,17 +169,29 @@ export const MyComposition = ({ slides = [], audio }: MyCompositionProps) => {
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
       {audio?.src && <Audio src={audio.src} />}
-      {slides.map((slide) => {
-        const durationInFrames = Math.max(
-          1,
-          Math.round(Math.max(0.5, slide.duration ?? DEFAULT_SLIDE_DURATION) * FPS)
-        );
+      {slides.map((slide, index) => {
+        const durationInFrames = getSlideDurationInFrames(slide);
         const from = currentFrame;
-        currentFrame += durationInFrames;
+        const nextSlide = slides[index + 1];
+        const exitTransition = nextSlide?.transition;
+        const exitDuration = getTransitionDurationInFrames(exitTransition, slide, nextSlide);
+        currentFrame += durationInFrames - exitDuration;
 
         return (
           <Sequence key={slide.id} from={from} durationInFrames={durationInFrames}>
-            <SlideView slide={slide} />
+            <SlideView
+              slide={slide}
+              transition={slide.transition}
+              exitTransition={exitTransition}
+              enterDuration={getTransitionDurationInFrames(
+                slide.transition,
+                slides[index - 1],
+                slide
+              )}
+              exitDuration={exitDuration}
+              durationInFrames={durationInFrames}
+              isFirst={index === 0}
+            />
           </Sequence>
         );
       })}
@@ -179,20 +199,96 @@ export const MyComposition = ({ slides = [], audio }: MyCompositionProps) => {
   );
 };
 
-const SlideView = ({ slide }: { slide: Slide }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const isGradientBackground = slide.backgroundColor.startsWith('linear-gradient(');
+const getTransitionStyles = (
+  transition: SlideTransitionType | undefined,
+  progress: number,
+  width: number,
+  height: number,
+  exiting = false
+) => {
+  switch (getTransitionType(transition)) {
+    case 'fade':
+      return { opacity: exiting ? 1 - progress : progress };
+    case 'slide-left':
+      return {
+        transform: `translateX(${(exiting ? -progress : 1 - progress) * width}px)`,
+      };
+    case 'slide-right':
+      return {
+        transform: `translateX(${(exiting ? progress : progress - 1) * width}px)`,
+      };
+    case 'slide-up':
+      return {
+        transform: `translateY(${(exiting ? -progress : 1 - progress) * height}px)`,
+      };
+    case 'slide-down':
+      return {
+        transform: `translateY(${(exiting ? progress : progress - 1) * height}px)`,
+      };
+    case 'zoom':
+      return {
+        opacity: exiting ? 1 - progress : progress,
+        transform: `scale(${exiting ? 1 + progress * 0.2 : 0.8 + progress * 0.2})`,
+      };
+    case 'wipe-left':
+      return exiting ? {} : { clipPath: `inset(0 0 0 ${(1 - progress) * 100}%)` };
+    case 'wipe-right':
+      return exiting ? {} : { clipPath: `inset(0 ${(1 - progress) * 100}% 0 0)` };
+    default:
+      return {};
+  }
+};
 
-  // simple fade-in for the slide
-  const opacity = interpolate(frame, [0, fps * 0.3], [0, 1], {
-    extrapolateRight: 'clamp',
-  });
+const SlideView = ({
+  slide,
+  transition,
+  exitTransition,
+  enterDuration,
+  exitDuration,
+  durationInFrames,
+  isFirst,
+}: {
+  slide: Slide;
+  transition?: SlideTransitionType;
+  exitTransition?: SlideTransitionType;
+  enterDuration: number;
+  exitDuration: number;
+  durationInFrames: number;
+  isFirst: boolean;
+}) => {
+  const frame = useCurrentFrame();
+  const { width, height, fps } = useVideoConfig();
+  const slideDuration = durationInFrames / fps;
+  const isGradientBackground = slide.backgroundColor.startsWith('linear-gradient(');
+  const enterProgress =
+    enterDuration > 0
+      ? interpolate(frame, [0, enterDuration - 1], [0, 1], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        })
+      : 1;
+  const exitProgress =
+    exitDuration > 0
+      ? interpolate(
+          frame,
+          [durationInFrames - exitDuration, durationInFrames - 1],
+          [0, 1],
+          { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+        )
+      : 0;
+  const transitionStyle = isFirst
+    ? { opacity: interpolate(frame, [0, SLIDE_TRANSITION_DURATION_IN_FRAMES - 1], [0, 1], {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      }) }
+    : getTransitionStyles(transition, enterProgress, width, height);
+  const exitStyle = getTransitionStyles(exitTransition, exitProgress, width, height, true);
 
   return (
     <AbsoluteFill
       style={{
-        opacity,
+        ...transitionStyle,
+        ...exitStyle,
         backgroundColor: isGradientBackground ? '#000000' : slide.backgroundColor || '#000000',
         backgroundImage:
           !slide.backgroundImage && isGradientBackground ? slide.backgroundColor : undefined,
@@ -202,6 +298,20 @@ const SlideView = ({ slide }: { slide: Slide }) => {
       {slide.backgroundImage && (
         <Img
           src={slide.backgroundImage}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+      )}
+      {slide.backgroundVideo && (
+        <Video
+          src={slide.backgroundVideo}
+          muted
+          loop
           style={{
             position: 'absolute',
             inset: 0,
@@ -237,13 +347,7 @@ const SlideView = ({ slide }: { slide: Slide }) => {
                 lineHeight: 1.2,
                 letterSpacing: 0,
                 fontFamily: getFontFamilyFromHtml(el.content),
-                ...getAnimationStyle(
-                  el.animation,
-                  frame,
-                  fps,
-                  el.animationDuration,
-                  el.animationDelay
-                ),
+                ...getElementAnimationStyle(el, frame / fps, slideDuration),
               }}
               dangerouslySetInnerHTML={{ __html: decodeHtmlContent(el.content) }}
             />
@@ -263,13 +367,7 @@ const SlideView = ({ slide }: { slide: Slide }) => {
                 position: 'absolute',
                 left: el.x,
                 top: el.y,
-                ...getAnimationStyle(
-                  el.animation,
-                  frame,
-                  fps,
-                  el.animationDuration,
-                  el.animationDelay
-                ),
+                ...getElementAnimationStyle(el, frame / fps, slideDuration),
               }}
             />
           );
@@ -287,13 +385,7 @@ const SlideView = ({ slide }: { slide: Slide }) => {
                 width: el.width,
                 height: el.height,
                 objectFit: 'cover',
-                ...getAnimationStyle(
-                  el.animation,
-                  frame,
-                  fps,
-                  el.animationDuration,
-                  el.animationDelay
-                ),
+                ...getElementAnimationStyle(el, frame / fps, slideDuration),
               }}
             />
           );
@@ -312,13 +404,7 @@ const SlideView = ({ slide }: { slide: Slide }) => {
                 display: 'block',
                 boxSizing: 'border-box',
                 overflow: 'hidden',
-                ...getAnimationStyle(
-                  el.animation,
-                  frame,
-                  fps,
-                  el.animationDuration,
-                  el.animationDelay
-                ),
+                ...getElementAnimationStyle(el, frame / fps, slideDuration),
               }}
             >
               <ShapeGraphic shape={el.shape} fill={el.fill} />
@@ -326,15 +412,25 @@ const SlideView = ({ slide }: { slide: Slide }) => {
           );
         }
 
-        // if (el.type === 'video' && el.src) {
-        //   return (
-        //     <Video
-        //       key={el.id}
-        //       src={el.src}
-        //       className="absolute inset-0 h-full w-full object-cover"
-        //     />
-        //   );
-        // }
+        if (el.type === 'video' && el.src) {
+          return (
+            <Video
+              key={el.id}
+              src={el.src}
+              muted
+              loop
+              style={{
+                position: 'absolute',
+                left: el.x,
+                top: el.y,
+                width: el.width,
+                height: el.height,
+                objectFit: 'cover',
+                ...getElementAnimationStyle(el, frame / fps, slideDuration),
+              }}
+            />
+          );
+        }
 
         return null;
       })}

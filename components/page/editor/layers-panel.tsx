@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronUp, Circle, Image, Trash2, Type } from 'lucide-react';
+import { ChevronDown, ChevronUp, Circle, Image, Trash2, Type, Video } from 'lucide-react';
 import type { Slide } from './types/slide';
 import { moveElementLayer, removeElement, updateElementLabel } from './actions/slide-actions';
 import { updateShapeElement } from './actions/shape-actions';
@@ -18,6 +18,7 @@ interface LayersPanelProps {
 const getElementLabel = (element: Slide['elements'][number]): string => {
   if (element.label?.trim()) return element.label.trim();
   if (element.type === 'image') return 'Image';
+  if (element.type === 'video') return 'Video';
   if (element.type === 'shape') return `${element.shape} shape`;
 
   const text = element.content
@@ -65,7 +66,13 @@ const LayersPanel = ({ slide, onUpdateSlide }: LayersPanelProps) => {
       ) : (
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
           {layers.map((element, index) => {
-            const Icon = element.type === 'text' ? Type : element.type === 'image' ? Image : Circle;
+            const Icon = element.type === 'text'
+              ? Type
+              : element.type === 'image'
+                ? Image
+                : element.type === 'video'
+                  ? Video
+                  : Circle;
             const label = getElementLabel(element);
 
             return (
